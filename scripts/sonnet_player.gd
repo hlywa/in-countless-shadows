@@ -47,6 +47,13 @@ var discoveries: Array[String] = []
 var show_help := true
 var paper_audio: AudioStreamPlayer
 var drag_sound_cooldown := 0.0
+var ink_time := 0.0
+
+func _process(delta: float) -> void:
+    if dragging >= 0:
+        ink_time += delta
+        queue_redraw()
+
 
 func _ready() -> void:
 	gothic = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") else ThemeDB.fallback_font
@@ -97,18 +104,17 @@ func _relation(a: String, b: String) -> Dictionary:
 	var wb := _plain(b)
 	for pair in RHYMES:
 		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":COPPER,"label":"RHYME"}
+			return {"color":COPPER,"label":"RHYME","symbol":"≈"}
 	for pair in TENSIONS:
 		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":OXBLOOD,"label":"MEANING"}
+			return {"color":OXBLOOD,"label":"TENSION","symbol":"◇"}
 	if wa == "stretchèd" or wb == "stretchèd":
-		return {"color":TEAL,"label":"TWO SYLLABLES"}
+		return {"color":TEAL,"label":"TWO SYLLABLES","symbol":"˘ /"}
 	if (wa == "will" and wb == "believe") or (wa == "in" and wb == "time") or (wa == "an" and wb == "antique") or (wa == "the" and wb == "beauty") or (wa == "to" and wb == "come"):
-		return {"color":TEAL,"label":"RHYTHM"}
+		return {"color":TEAL,"label":"RHYTHM","symbol":"˘ /"}
 	if (wa == "my" and wb == "verse") or (wa == "antique" and wb == "song") or (wa == "your" and wb == "eyes") or (wa == "in" and wb == "my") or (wa == "your" and wb == "true") or (wa == "some" and wb == "child") or (wa == "should" and wb == "live") or (wa == "a" and wb == "tomb"):
-		return {"color":VIOLET,"label":"PHRASE"}
+		return {"color":VIOLET,"label":"PHRASE","symbol":"⌣"}
 	return {}
-
 func _neighbor(i: int, j: int) -> bool:
 	var a := _rect(i)
 	var b := _rect(j)
@@ -145,7 +151,7 @@ func _page() -> void:
 			var edge := _rect(i).end
 			_ink_join(Vector2(edge.x+3.0,edge.y-18.0),color,1.0)
 			if not r.is_empty():
-				_write(str(r["label"]),Vector2(edge.x-8.0,edge.y-47.0),13,color)
+				_write(str(r.get("symbol","")) + "  " + str(r["label"]),Vector2(edge.x-8.0,edge.y-47.0),13,color)
 	for i in range(pieces.size()):
 		if i != dragging:
 			_draw_piece(i)
@@ -154,7 +160,6 @@ func _page() -> void:
 	if discoveries.size() > 0:
 		var last: String = discoveries[discoveries.size()-1]
 		_write(last,Vector2(110,710),17,OXBLOOD)
-
 func _has_raised() -> bool:
 	for p in pieces:
 		if bool(p["raised"]):
@@ -169,9 +174,18 @@ func _draw_piece(i: int) -> void:
 	if active:
 		draw_rect(r.grow(4),Color(INK,0.045))
 		_ink_outline(r,INK)
+		if i == dragging:
+			var phase := fposmod(ink_time * 26.0,19.0)
+			for drop in range(3):
+				var drip_x := r.position.x + 10.0 + float(drop) * maxf(9.0,(r.size.x-20.0)/3.0)
+				var drip_y := r.end.y + fposmod(phase + float(drop)*7.0,21.0)
+				draw_line(Vector2(drip_x,r.end.y),Vector2(drip_x,drip_y),Color(INK,0.55),1.5,true)
+				draw_circle(Vector2(drip_x,drip_y),2.2,Color(INK,0.72))
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
 	_write(word,r.position+Vector2(10,29),27,INK,true)
+	if on_page and _plain(word) == "stretchèd":
+		_write("˘  /",r.position+Vector2(12,49),16,TEAL)
 	if i == dragging:
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]):
@@ -205,7 +219,7 @@ func _gui_input(event: InputEvent) -> void:
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
 					show_help = false
-					_paper_sound(0.38)
+					_paper_sound(0.14)
 					accept_event()
 					queue_redraw()
 					return
@@ -233,12 +247,11 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					discoveries.append("Words joined. Try another arrangement.")
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
-			_paper_sound(0.65)
+			_paper_sound(0.24)
 			if not bool(pieces[id]["raised"]):
 				discoveries.append("Return to the ink. Lift another word.")
 			queue_redraw()
 			accept_event()
-
 # Irregular pools and small hanging droplets, drawn in the same canvas as the type.
 func _ink_outline(r: Rect2, ink_color: Color) -> void:
 	var edge := r.grow(3.0)
