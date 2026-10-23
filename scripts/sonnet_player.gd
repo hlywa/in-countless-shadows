@@ -12,26 +12,33 @@ const OXBLOOD := Color("#a4484d")
 const STAGE := Rect2(110, 105, 1060, 360)
 const PILE := Rect2(105, 485, 1070, 212)
 const SNAP := 30.0
-const WORDS := [
-	"Who","will","believe","my","verse","in","time","to","come,",
-	"If","it","were","fill'd","with","your","most","high","deserts?",
-	"Though","yet","heaven","knows","is","but","as","a","tomb",
-	"Which","hides","life","and","shows","not","half","parts.",
-	"beauty","eyes","poet","lies;","papers,","yellow'd","age,",
-	"truth","than","tongue,","true","rights","rage","And",
-	"stretchèd","meter","of","an","antique","song:",
-	"But","some","child","alive","that","You","should","live",
-	"twice,","in","it","and","in","my","rhyme."
+# First Folio-style spelling is not enforced; this is a complete modernized Sonnet 17.
+# A syllable count is an editorial reading, not a verdict on spoken performance.
+const SONNET_LINES := [
+	"Who will believe my verse in time to come,",
+	"If it were fill'd with your most high deserts?",
+	"Though yet heaven knows it is but as a tomb",
+	"Which hides your life, and shows not half your parts.",
+	"If I could write the beauty of your eyes",
+	"And in fresh numbers number all your graces,",
+	"The age to come would say 'This poet lies;",
+	"Such heavenly touches ne'er touch'd earthly faces.'",
+	"So should my papers, yellow'd with their age,",
+	"Be scorn'd, like old men of less truth than tongue,",
+	"And your true rights be term'd a poet's rage",
+	"And stretchèd meter of an antique song:",
+	"But were some child of yours alive that time,",
+	"You should live twice; in it, and in my rhyme."
 ]
+const RHYME_SCHEME := ["A","B","A","B","C","D","C","D","E","F","E","F","G","G"]
 const SYLLABLES := {
-	"believe":2, "deserts":2, "heaven":2, "beauty":2,
-	"poet":2, "papers":2, "yellow'd":2, "stretchèd":2,
-	"meter":2, "antique":2, "alive":2
+	"believe":2, "deserts":2, "heaven":2, "beauty":2, "numbers":2,
+	"number":2, "graces":2, "poet":2, "heavenly":3, "earthly":2,
+	"faces":2, "papers":2, "yellow'd":2, "scorn'd":1, "stretchèd":2,
+	"meter":2, "antique":2, "alive":2, "twice":1, "would":1,
+	"touches":2, "less":1, "term'd":1, "rage":1, "should":1
 }
-const RHYMES := [
-	["come","tomb"], ["deserts","parts"], ["eyes","lies"],
-	["graces","faces"], ["age","rage"], ["tongue","song"], ["time","rhyme"]
-]
+# These pairings are interpretive suggestions, deliberately distinct from prosodic rules.
 const TENSIONS := [
 	["truth","lies"], ["beauty","eyes"], ["child","rhyme"],
 	["verse","truth"], ["poet","lies"], ["life","tomb"]
@@ -39,6 +46,7 @@ const TENSIONS := [
 var gothic: Font
 var body_font: Font
 var pieces: Array[Dictionary] = []
+var original_lines: Array[PackedStringArray] = []
 var dragging := -1
 var hover := -1
 var grab := Vector2.ZERO
@@ -66,19 +74,28 @@ func _ready() -> void:
 
 func _scatter() -> void:
 	pieces.clear()
+	original_lines.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 17017
-	for i in range(WORDS.size()):
-		var word: String = WORDS[i]
-		var width := maxf(37.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x + 22.0)
-		# A jittered multi-row typesetter pile keeps more words individually reachable.
-		var column := i % 15
-		var row_index := int(i / 15)
-		var px := 112.0 + float(column) * 70.0 + rng.randf_range(-14.0, 14.0)
-		var py := 501.0 + float(row_index) * 34.0 + rng.randf_range(-9.0, 9.0)
-		px = clampf(px, 105.0, 1165.0 - width)
-		py = clampf(py, 494.0, 663.0)
-		pieces.append({"word":word,"pos":Vector2(px,py),"width":width,"raised":false})
+	var index := 0
+	for line_number in range(SONNET_LINES.size()):
+		var words: PackedStringArray = SONNET_LINES[line_number].split(" ", false)
+		original_lines.append(words)
+		var syllable_position := 0
+		for word_index in range(words.size()):
+			var word: String = words[word_index]
+			var width := maxf(37.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x + 22.0)
+			var column := index % 15
+			var row_index := int(index / 15)
+			var px := 112.0 + float(column) * 70.0 + rng.randf_range(-14.0, 14.0)
+			var py := 501.0 + float(row_index % 5) * 34.0 + rng.randf_range(-9.0, 9.0)
+			px = clampf(px, 105.0, 1165.0 - width)
+			py = clampf(py, 494.0, 663.0)
+			pieces.append({"word":word, "pos":Vector2(px,py), "width":width, "raised":false,
+				"line":line_number, "word_index":word_index, "syllable_start":syllable_position,
+				"syllables":_syllables(word), "rhyme":RHYME_SCHEME[line_number]})
+			syllable_position += _syllables(word)
+			index += 1
 
 func _scale() -> float:
 	return maxf(0.001, minf(size.x / 1280.0, size.y / 720.0))
@@ -99,22 +116,50 @@ func _plain(word: String) -> String:
 func _syllables(word: String) -> int:
 	return int(SYLLABLES.get(_plain(word), 1))
 
-func _relation(a: String, b: String) -> Dictionary:
-	var wa := _plain(a)
-	var wb := _plain(b)
-	for pair in RHYMES:
-		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":COPPER,"label":"RHYME","symbol":"≈"}
+# Analyze neighboring pieces using their provenance and the syllabic sequence
+# assembled on the page. Stress is presented as an iambic hypothesis, not a fact.
+func _relation_ids(left_id: int, right_id: int) -> Dictionary:
+	var left: Dictionary = pieces[left_id]
+	var right: Dictionary = pieces[right_id]
+	var wa := _plain(str(left["word"]))
+	var wb := _plain(str(right["word"]))
+	if int(left["line"]) == int(right["line"]) and int(right["word_index"]) == int(left["word_index"]) + 1:
+		var start_syllable := _assembled_syllables_before(left_id)
+		var end_syllable := start_syllable + int(left["syllables"])
+		if end_syllable % 2 == 0:
+			return {"color":TEAL,"label":"IAMBIC FOOT?","symbol":"˘ /"}
+		return {"color":TEAL,"label":"METRICAL PULSE?","symbol":"˘"}
+	if str(left["rhyme"]) == str(right["rhyme"]) and int(left["line"]) != int(right["line"]):
+		if int(left["word_index"]) == original_lines[int(left["line"])].size() - 1 and int(right["word_index"]) == original_lines[int(right["line"])].size() - 1:
+			return {"color":COPPER,"label":"RHYME POSITION","symbol":"≈"}
 	for pair in TENSIONS:
 		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":OXBLOOD,"label":"TENSION","symbol":"◇"}
-	if wa == "stretchèd" or wb == "stretchèd":
-		return {"color":TEAL,"label":"TWO SYLLABLES","symbol":"˘ /"}
-	if (wa == "will" and wb == "believe") or (wa == "in" and wb == "time") or (wa == "an" and wb == "antique") or (wa == "the" and wb == "beauty") or (wa == "to" and wb == "come"):
-		return {"color":TEAL,"label":"RHYTHM","symbol":"˘ /"}
-	if (wa == "my" and wb == "verse") or (wa == "antique" and wb == "song") or (wa == "your" and wb == "eyes") or (wa == "in" and wb == "my") or (wa == "your" and wb == "true") or (wa == "some" and wb == "child") or (wa == "should" and wb == "live") or (wa == "a" and wb == "tomb"):
-		return {"color":VIOLET,"label":"PHRASE","symbol":"⌣"}
+			return {"color":OXBLOOD,"label":"INTERPRETIVE TENSION","symbol":"◇"}
+	if int(left["line"]) == int(right["line"]):
+		return {"color":VIOLET,"label":"SHARED LINE","symbol":"⌣"}
 	return {}
+
+func _assembled_syllables_before(piece_id: int) -> int:
+	var count := 0
+	var target := _rect(piece_id)
+	for i in range(pieces.size()):
+		if i == piece_id or not bool(pieces[i]["raised"]):
+			continue
+		var r := _rect(i)
+		if absf(r.get_center().y - target.get_center().y) < 28.0 and r.position.x < target.position.x:
+			count += int(pieces[i]["syllables"])
+	return count
+
+func _assembled_meter(piece_id: int) -> String:
+	var count := _assembled_syllables_before(piece_id)
+	var n := int(pieces[piece_id]["syllables"])
+	var result := ""
+	for k in range(n):
+		result += "˘" if (count + k) % 2 == 0 else "/"
+		if k < n - 1:
+			result += " "
+	return result
+
 func _neighbor(i: int, j: int) -> bool:
 	var a := _rect(i)
 	var b := _rect(j)
@@ -137,7 +182,7 @@ func _page() -> void:
 		draw_line(Vector2(142,287),Vector2(1138,287),Color(INK,0.075),1.0)
 	if show_help and not _has_raised() and dragging < 0:
 		_write("Lift a word from the ink below.",Vector2(478,315),22,Color(INK,0.28))
-	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(106,478),13,Color(INK,0.38))
+	_write("SONNET XVII  ·  MOVABLE TYPE   |   TEAL ˘ / METER   COPPER ≈ RHYME   VIOLET ⌣ LINE   RED ◇ TENSION",Vector2(106,478),13,Color(INK,0.48))
 	draw_line(Vector2(105,486),Vector2(1175,486),Color(INK,0.13),1.0)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
@@ -146,7 +191,7 @@ func _page() -> void:
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]) or j == dragging or not _neighbor(i,j):
 				continue
-			var r: Dictionary = _relation(str(pieces[i]["word"]),str(pieces[j]["word"]))
+			var r: Dictionary = _relation_ids(i,j)
 			var color: Color = r.get("color",INK)
 			var edge := _rect(i).end
 			_ink_join(Vector2(edge.x+3.0,edge.y-18.0),color,1.0)
@@ -184,8 +229,8 @@ func _draw_piece(i: int) -> void:
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
 	_write(word,r.position+Vector2(10,29),27,INK,true)
-	if on_page and _plain(word) == "stretchèd":
-		_write("˘  /",r.position+Vector2(12,49),16,TEAL)
+	if on_page:
+		_write(_assembled_meter(i),r.position+Vector2(12,49),13,TEAL)
 	if i == dragging:
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]):
@@ -193,7 +238,7 @@ func _draw_piece(i: int) -> void:
 			var target := _rect(j)
 			var distance := (r.position - Vector2(target.end.x+9,target.position.y)).length()
 			if distance < 46.0:
-				var rel: Dictionary = _relation(str(pieces[j]["word"]),word)
+				var rel: Dictionary = _relation_ids(j,i)
 				var ink_color: Color = rel.get("color",INK)
 				_ink_outline(target,ink_color)
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
@@ -241,12 +286,16 @@ func _gui_input(event: InputEvent) -> void:
 			if closest >= 0:
 				var anchor := _rect(closest)
 				pieces[id]["pos"] = Vector2(anchor.end.x+8.0,anchor.position.y)
-				var relation: Dictionary = _relation(str(pieces[closest]["word"]),str(pieces[id]["word"]))
+				var relation: Dictionary = _relation_ids(closest,id)
 				if not relation.is_empty():
 					discoveries.append(str(relation["label"]) + "  ·  " + str(pieces[closest]["word"]) + " / " + str(pieces[id]["word"]))
 				else:
 					discoveries.append("Words joined. Try another arrangement.")
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
+			if bool(pieces[id]["raised"]):
+				var count := _assembled_syllables_before(id) + int(pieces[id]["syllables"])
+				if count == 10:
+					discoveries.append("TEN SYLLABLES · a pentameter-length sequence (stress remains open)")
 			_paper_sound(0.24)
 			if not bool(pieces[id]["raised"]):
 				discoveries.append("Return to the ink. Lift another word.")
