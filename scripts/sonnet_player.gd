@@ -113,7 +113,7 @@ func _draw_page() -> void:
 		var preview: String = LINES[i]
 		var saved: Array = arrangements[i]
 		if not saved.is_empty():
-			var parts := LINES[i].split(" ", false)
+			var parts: PackedStringArray = String(LINES[i]).split(" ", false)
 			var arranged := PackedStringArray()
 			for id in saved:
 				arranged.append(parts[id])
