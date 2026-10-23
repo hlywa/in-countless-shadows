@@ -1,3 +1,14 @@
-[gd_scene format=3 uid="uid://u45cg7s16bhf"]
+[gd_scene load_steps=2 format=3 uid="uid://u45cg7s16bhf"]
 
-[node name="Main" type="Node2D" unique_id=90553655]
+[ext_resource type="PackedScene" path="res://scenes/title_screen.tscn" id="1_title"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitleScreen" parent="." instance=ExtResource("1_title")]
+layout_mode = 1
