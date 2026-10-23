@@ -9,8 +9,8 @@ const TEAL := Color("#477e7b")
 const COPPER := Color("#a16b49")
 const VIOLET := Color("#65558d")
 const OXBLOOD := Color("#a4484d")
-const STAGE := Rect2(110, 105, 1060, 360)
-const PILE := Rect2(105, 485, 1070, 212)
+const STAGE := Rect2(105, 105, 775, 585)
+const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
 # First Folio-style spelling is not enforced; this is a complete modernized Sonnet 17.
 # A syllable count is an editorial reading, not a verdict on spoken performance.
@@ -85,12 +85,14 @@ func _scatter() -> void:
 		for word_index in range(words.size()):
 			var word: String = words[word_index]
 			var width := maxf(37.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x + 22.0)
-			var column := index % 15
-			var row_index := int(index / 15)
-			var px := 112.0 + float(column) * 70.0 + rng.randf_range(-14.0, 14.0)
-			var py := 501.0 + float(row_index % 5) * 34.0 + rng.randf_range(-9.0, 9.0)
-			px = clampf(px, 105.0, 1165.0 - width)
-			py = clampf(py, 494.0, 663.0)
+			# Keep the same loose, inky jumble, now down the right-hand side.
+			# The staggered columns prevent every word from landing on one spot.
+			var column := index % 3
+			var row_index := int(index / 3)
+			var px := PILE.position.x + 4.0 + float(column) * 83.0 + rng.randf_range(-13.0, 13.0)
+			var py := PILE.position.y + 18.0 + float(row_index % 22) * 25.0 + rng.randf_range(-9.0, 9.0)
+			px = clampf(px, PILE.position.x + 2.0, PILE.end.x - width - 2.0)
+			py = clampf(py, PILE.position.y + 2.0, PILE.end.y - 43.0)
 			pieces.append({"word":word, "pos":Vector2(px,py), "width":width, "raised":false,
 				"line":line_number, "word_index":word_index, "syllable_start":syllable_position,
 				"syllables":_syllables(word), "rhyme":RHYME_SCHEME[line_number]})
@@ -179,11 +181,11 @@ func _page() -> void:
 	draw_line(Vector2(105,87),Vector2(1175,87),Color(INK,0.16),1.0)
 	# The page is intentionally unruled until the player lifts a word.
 	if dragging >= 0 or _has_raised():
-		draw_line(Vector2(142,287),Vector2(1138,287),Color(INK,0.075),1.0)
+		draw_line(Vector2(135,400),Vector2(855,400),Color(INK,0.075),1.0)
 	if show_help and not _has_raised() and dragging < 0:
-		_write("Lift a word from the ink below.",Vector2(478,315),22,Color(INK,0.28))
-	_write("SONNET XVII  ·  MOVABLE TYPE   |   TEAL ˘ / METER   COPPER ≈ RHYME   VIOLET ⌣ LINE   RED ◇ TENSION",Vector2(106,478),13,Color(INK,0.48))
-	draw_line(Vector2(105,486),Vector2(1175,486),Color(INK,0.13),1.0)
+		_write("Lift a word from the ink below.",Vector2(300,385),22,Color(INK,0.28))
+	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
+	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
 		if not bool(pieces[i]["raised"]) or i == dragging:
@@ -204,7 +206,7 @@ func _page() -> void:
 		_draw_piece(dragging)
 	if discoveries.size() > 0:
 		var last: String = discoveries[discoveries.size()-1]
-		_write(last,Vector2(110,710),17,OXBLOOD)
+		_write(last,Vector2(110,702),17,OXBLOOD)
 func _has_raised() -> bool:
 	for p in pieces:
 		if bool(p["raised"]):
