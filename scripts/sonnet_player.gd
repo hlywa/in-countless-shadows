@@ -229,9 +229,16 @@ func _write(t: String, at: Vector2, font_size: int, color: Color, use_gothic := 
 func _page() -> void:
 	_write("In Countless Shadows", Vector2(105,73), 40, INK, true)
 	draw_line(Vector2(105,87),Vector2(1175,87),Color(INK,0.16),1.0)
-	# The page is intentionally unruled until the player lifts a word.
-	if dragging >= 0 or _has_raised():
-		draw_line(Vector2(135,400),Vector2(855,400),Color(INK,0.075),1.0)
+	# Fourteen quiet letterpress baselines: one for each verse of the sonnet.
+	# The seventh rhyme pair is the closing couplet, not a seven-line poem.
+	for line_index in range(14):
+		var baseline_y := 154.0 + float(line_index) * 39.0
+		var line_color := Color(INK, 0.15 if line_index == 12 else 0.085)
+		draw_line(Vector2(129,baseline_y),Vector2(862,baseline_y),line_color,1.0)
+		if not intro_active:
+			_write(str(line_index + 1).pad_zeros(2),Vector2(109,baseline_y - 4.0),11,Color(INK,0.3))
+		if line_index == 3 or line_index == 7 or line_index == 11:
+			draw_line(Vector2(129,baseline_y + 8.0),Vector2(862,baseline_y + 8.0),Color(INK,0.12),1.0)
 	if show_help and not intro_active and not _has_raised() and dragging < 0:
 		_write("Lift a word from the ink at right.",Vector2(300,385),22,Color(INK,0.28))
 	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
