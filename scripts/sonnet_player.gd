@@ -123,7 +123,8 @@ func _button(rect: Rect2, label: String, action: String) -> void:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var sc := maxf(0.65, minf(size.x / 1280.0, size.y / 720.0))
-		var local := (event.position - Vector2((size.x - 1280.0 * sc) * 0.5, (size.y - 720.0 * sc) * 0.5)) / sc
+		var mouse_event := event as InputEventMouseButton
+		var local: Vector2 = (mouse_event.position - Vector2((size.x - 1280.0 * sc) * 0.5, (size.y - 720.0 * sc) * 0.5)) / sc
 		for region in click_regions:
 			if region.rect.has_point(local):
 				_apply(region)
