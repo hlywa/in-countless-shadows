@@ -12,6 +12,11 @@ const OXBLOOD := Color("#a4484d")
 const STAGE := Rect2(105, 105, 775, 585)
 const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
+const INTRO_HOLD := 2.4
+const INTRO_FLY := 2.1
+const TRAY_ROWS := 9
+const TRAY_COLS := 2
+const TRAY_PAGE_SIZE := TRAY_ROWS * TRAY_COLS
 # First Folio-style spelling is not enforced; this is a complete modernized Sonnet 17.
 # A syllable count is an editorial reading, not a verdict on spoken performance.
 const SONNET_LINES := [
@@ -56,12 +61,22 @@ var show_help := true
 var paper_audio: AudioStreamPlayer
 var drag_sound_cooldown := 0.0
 var ink_time := 0.0
+var intro_elapsed := 0.0
+var intro_active := true
+var tray_page := 0
+var tray_indices: Array[int] = []
 
 func _process(delta: float) -> void:
-    if dragging >= 0:
-        ink_time += delta
-        queue_redraw()
-
+	if intro_active:
+		intro_elapsed += delta
+		if intro_elapsed >= INTRO_HOLD + INTRO_FLY:
+			intro_active = false
+			for i in range(pieces.size()):
+				pieces[i]["pos"] = pieces[i]["tray_pos"]
+			queue_redraw()
+	elif dragging >= 0:
+		ink_time += delta
+		queue_redraw()
 
 func _ready() -> void:
 	gothic = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") else ThemeDB.fallback_font
@@ -75,29 +90,64 @@ func _ready() -> void:
 func _scatter() -> void:
 	pieces.clear()
 	original_lines.clear()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 17017
+	tray_indices.clear()
 	var index := 0
 	for line_number in range(SONNET_LINES.size()):
 		var words: PackedStringArray = SONNET_LINES[line_number].split(" ", false)
 		original_lines.append(words)
 		var syllable_position := 0
+		var x := 129.0
+		var y := 123.0 + float(line_number) * 39.0
 		for word_index in range(words.size()):
 			var word: String = words[word_index]
-			var width := maxf(37.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x + 22.0)
-			# Keep the same loose, inky jumble, now down the right-hand side.
-			# The staggered columns prevent every word from landing on one spot.
-			var column := index % 3
-			var row_index := int(index / 3)
-			var px := PILE.position.x + 4.0 + float(column) * 83.0 + rng.randf_range(-13.0, 13.0)
-			var py := PILE.position.y + 18.0 + float(row_index % 22) * 25.0 + rng.randf_range(-9.0, 9.0)
-			px = clampf(px, PILE.position.x + 2.0, PILE.end.x - width - 2.0)
-			py = clampf(py, PILE.position.y + 2.0, PILE.end.y - 43.0)
-			pieces.append({"word":word, "pos":Vector2(px,py), "width":width, "raised":false,
+			var width := maxf(29.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
+			var original_pos := Vector2(x, y)
+			pieces.append({"word":word, "pos":original_pos, "original_pos":original_pos,
+				"tray_pos":Vector2.ZERO, "width":width, "raised":false,
 				"line":line_number, "word_index":word_index, "syllable_start":syllable_position,
 				"syllables":_syllables(word), "rhyme":RHYME_SCHEME[line_number]})
+			x += width + 4.0
 			syllable_position += _syllables(word)
 			index += 1
+	# Distribute all the words into readable pages of loose type.
+	# The deterministic shuffle preserves the sense of a jumble without overlap.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 17017
+	for i in range(pieces.size()):
+		tray_indices.append(i)
+	for i in range(tray_indices.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var old := tray_indices[i]
+		tray_indices[i] = tray_indices[j]
+		tray_indices[j] = old
+	for order in range(tray_indices.size()):
+		var id := tray_indices[order]
+		var slot := order % TRAY_PAGE_SIZE
+		var col := slot % TRAY_COLS
+		var row_index := int(slot / TRAY_COLS)
+		var tx := PILE.position.x + 12.0 + float(col) * 130.0
+		var ty := PILE.position.y + 49.0 + float(row_index) * 56.0
+		pieces[id]["tray_pos"] = Vector2(tx, ty)
+		pieces[id]["tray_page"] = int(order / TRAY_PAGE_SIZE)
+		pieces[id]["width"] = maxf(29.0, gothic.get_string_size(str(pieces[id]["word"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
+
+func _visible_piece(i: int) -> bool:
+	if intro_active:
+		return true
+	if i == dragging or bool(pieces[i]["raised"]):
+		return true
+	return int(pieces[i]["tray_page"]) == tray_page
+
+func _intro_position(i: int) -> Vector2:
+	var original: Vector2 = pieces[i]["original_pos"]
+	var destination: Vector2 = pieces[i]["tray_pos"]
+	if intro_elapsed <= INTRO_HOLD:
+		return original
+	var fraction := clampf((intro_elapsed - INTRO_HOLD) / INTRO_FLY, 0.0, 1.0)
+	var delay := float(i % 17) / 35.0
+	var t := clampf((fraction - delay) / (1.0 - delay), 0.0, 1.0)
+	t = t * t * (3.0 - 2.0 * t)
+	return original.lerp(destination, t)
 
 func _scale() -> float:
 	return maxf(0.001, minf(size.x / 1280.0, size.y / 720.0))
@@ -110,7 +160,7 @@ func _local_point(p: Vector2) -> Vector2:
 
 func _rect(i: int) -> Rect2:
 	var piece: Dictionary = pieces[i]
-	return Rect2(piece["pos"], Vector2(piece["width"], 39))
+	return Rect2(_intro_position(i) if intro_active else Vector2(piece["pos"]), Vector2(piece["width"], 39))
 
 func _plain(word: String) -> String:
 	return word.to_lower().trim_suffix(",").trim_suffix(".").trim_suffix(":").trim_suffix(";").trim_suffix("?").trim_suffix("!")
@@ -182,13 +232,17 @@ func _page() -> void:
 	# The page is intentionally unruled until the player lifts a word.
 	if dragging >= 0 or _has_raised():
 		draw_line(Vector2(135,400),Vector2(855,400),Color(INK,0.075),1.0)
-	if show_help and not _has_raised() and dragging < 0:
-		_write("Lift a word from the ink below.",Vector2(300,385),22,Color(INK,0.28))
+	if show_help and not intro_active and not _has_raised() and dragging < 0:
+		_write("Lift a word from the ink at right.",Vector2(300,385),22,Color(INK,0.28))
 	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
+	if not intro_active:
+		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(908,684), 17, INK)
+	else:
+		_write("SONNET XVII", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
-		if not bool(pieces[i]["raised"]) or i == dragging:
+		if intro_active or not bool(pieces[i]["raised"]) or i == dragging:
 			continue
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]) or j == dragging or not _neighbor(i,j):
@@ -200,7 +254,7 @@ func _page() -> void:
 			if not r.is_empty():
 				_write(str(r.get("symbol","")) + "  " + str(r["label"]),Vector2(edge.x-8.0,edge.y-47.0),13,color)
 	for i in range(pieces.size()):
-		if i != dragging:
+		if i != dragging and _visible_piece(i):
 			_draw_piece(i)
 	if dragging >= 0:
 		_draw_piece(dragging)
@@ -217,7 +271,7 @@ func _draw_piece(i: int) -> void:
 	var r := _rect(i)
 	var word: String = str(pieces[i]["word"])
 	var active := i == hover or i == dragging
-	var on_page := bool(pieces[i]["raised"])
+	var on_page := bool(pieces[i]["raised"]) and not intro_active
 	if active:
 		draw_rect(r.grow(4),Color(INK,0.045))
 		_ink_outline(r,INK)
@@ -230,7 +284,7 @@ func _draw_piece(i: int) -> void:
 				draw_circle(Vector2(drip_x,drip_y),2.2,Color(INK,0.72))
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
-	_write(word,r.position+Vector2(10,29),27,INK,true)
+	_write(word,r.position+Vector2(4,23 if intro_active or not on_page else 29),20 if intro_active or not on_page else 27,INK,true)
 	if on_page:
 		_write(_assembled_meter(i),r.position+Vector2(12,49),13,TEAL)
 	if i == dragging:
@@ -246,6 +300,8 @@ func _draw_piece(i: int) -> void:
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
 func _gui_input(event: InputEvent) -> void:
+	if intro_active:
+		return
 	if event is InputEventMouseMotion:
 		mouse_at = _local_point(event.position)
 		if dragging >= 0:
@@ -253,15 +309,30 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			hover = -1
 			for i in range(pieces.size()-1,-1,-1):
-				if _rect(i).grow(4).has_point(mouse_at):
+				if _visible_piece(i) and _rect(i).grow(4).has_point(mouse_at):
 					hover = i
 					break
 		queue_redraw()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and PILE.has_point(_local_point(event.position)):
+		tray_page = mini(tray_page + 1, int((tray_indices.size() - 1) / TRAY_PAGE_SIZE))
+		queue_redraw()
+		accept_event()
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and PILE.has_point(_local_point(event.position)):
+		tray_page = maxi(0, tray_page - 1)
+		queue_redraw()
+		accept_event()
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var p := _local_point(event.position)
 		if event.pressed:
+			if Rect2(900,658,275,48).has_point(p):
+				tray_page = (tray_page + 1) % int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))
+				queue_redraw()
+				accept_event()
+				return
 			for i in range(pieces.size()-1,-1,-1):
-				if _rect(i).grow(4).has_point(p):
+				if _visible_piece(i) and _rect(i).grow(4).has_point(p):
 					dragging = i
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
@@ -300,6 +371,7 @@ func _gui_input(event: InputEvent) -> void:
 					discoveries.append("TEN SYLLABLES · a pentameter-length sequence (stress remains open)")
 			_paper_sound(0.24)
 			if not bool(pieces[id]["raised"]):
+				pieces[id]["pos"] = pieces[id]["tray_pos"]
 				discoveries.append("Return to the ink. Lift another word.")
 			queue_redraw()
 			accept_event()
