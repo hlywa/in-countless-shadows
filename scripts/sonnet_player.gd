@@ -45,6 +45,8 @@ var grab := Vector2.ZERO
 var mouse_at := Vector2.ZERO
 var discoveries: Array[String] = []
 var show_help := true
+var paper_audio: AudioStreamPlayer
+var drag_sound_cooldown := 0.0
 
 func _ready() -> void:
     gothic = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") else ThemeDB.fallback_font
@@ -52,6 +54,7 @@ func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_STOP
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _scatter()
+    _make_paper_audio()
     queue_redraw()
 
 func _scatter() -> void:
@@ -61,8 +64,13 @@ func _scatter() -> void:
     for i in range(WORDS.size()):
         var word: String = WORDS[i]
         var width := maxf(37.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x + 22.0)
-        var px := PILE.position.x + rng.randf_range(5.0, PILE.size.x - minf(width + 12.0, PILE.size.x))
-        var py := PILE.position.y + rng.randf_range(12.0, PILE.size.y - 48.0)
+        # A jittered multi-row typesetter pile keeps more words individually reachable.
+        var column := i % 15
+        var row_index := int(i / 15)
+        var px := 112.0 + float(column) * 70.0 + rng.randf_range(-14.0, 14.0)
+        var py := 501.0 + float(row_index) * 34.0 + rng.randf_range(-9.0, 9.0)
+        px = clampf(px, 105.0, 1165.0 - width)
+        py = clampf(py, 494.0, 663.0)
         pieces.append({"word":word,"pos":Vector2(px,py),"width":width,"raised":false})
 
 func _scale() -> float:
@@ -95,7 +103,9 @@ func _relation(a: String, b: String) -> Dictionary:
             return {"color":OXBLOOD,"label":"MEANING"}
     if wa == "stretchèd" or wb == "stretchèd":
         return {"color":TEAL,"label":"TWO SYLLABLES"}
-    if (wa == "my" and wb == "verse") or (wa == "antique" and wb == "song") or (wa == "your" and wb == "eyes"):
+    if (wa == "will" and wb == "believe") or (wa == "in" and wb == "time") or (wa == "an" and wb == "antique") or (wa == "the" and wb == "beauty") or (wa == "to" and wb == "come"):
+        return {"color":TEAL,"label":"RHYTHM"}
+    if (wa == "my" and wb == "verse") or (wa == "antique" and wb == "song") or (wa == "your" and wb == "eyes") or (wa == "in" and wb == "my") or (wa == "your" and wb == "true") or (wa == "some" and wb == "child") or (wa == "should" and wb == "live") or (wa == "a" and wb == "tomb"):
         return {"color":VIOLET,"label":"PHRASE"}
     return {}
 
@@ -131,9 +141,9 @@ func _page() -> void:
             if i == j or not bool(pieces[j]["raised"]) or j == dragging or not _neighbor(i,j):
                 continue
             var r: Dictionary = _relation(str(pieces[i]["word"]),str(pieces[j]["word"]))
-            var color: Color = r.get("color",TEAL)
+            var color: Color = r.get("color",INK)
             var edge := _rect(i).end
-            draw_line(Vector2(edge.x-2.0,edge.y-17.0),Vector2(edge.x+14.0,edge.y-17.0),color,4.0,true)
+            _ink_join(Vector2(edge.x+3.0,edge.y-18.0),color,1.0)
             if not r.is_empty():
                 _write(str(r["label"]),Vector2(edge.x-8.0,edge.y-47.0),13,color)
     for i in range(pieces.size()):
@@ -158,9 +168,7 @@ func _draw_piece(i: int) -> void:
     var on_page := bool(pieces[i]["raised"])
     if active:
         draw_rect(r.grow(4),Color(INK,0.045))
-        draw_rect(r.grow(3),Color(INK,0.88),false,2.0)
-        draw_rect(Rect2(r.position+Vector2(2,36),Vector2(6,4)),Color(INK,0.66))
-        draw_circle(r.position+Vector2(r.size.x-4,39),3.0,Color(INK,0.62))
+        _ink_outline(r,INK)
     elif on_page:
         draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
     _write(word,r.position+Vector2(10,29),27,INK,true)
@@ -173,8 +181,8 @@ func _draw_piece(i: int) -> void:
             if distance < 46.0:
                 var rel: Dictionary = _relation(str(pieces[j]["word"]),word)
                 var ink_color: Color = rel.get("color",INK)
-                draw_rect(target.grow(4),Color(ink_color,0.8),false,2.5)
-                draw_circle(Vector2(target.end.x+4,target.get_center().y),5.0,ink_color)
+                _ink_outline(target,ink_color)
+                _ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
 func _gui_input(event: InputEvent) -> void:
     if event is InputEventMouseMotion:
@@ -197,6 +205,7 @@ func _gui_input(event: InputEvent) -> void:
                     hover = i
                     grab = p - Vector2(pieces[i]["pos"])
                     show_help = false
+                    _paper_sound(0.38)
                     accept_event()
                     queue_redraw()
                     return
@@ -224,7 +233,64 @@ func _gui_input(event: InputEvent) -> void:
                 else:
                     discoveries.append("Words joined. Try another arrangement.")
             pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
+            _paper_sound(0.65)
             if not bool(pieces[id]["raised"]):
                 discoveries.append("Return to the ink. Lift another word.")
             queue_redraw()
             accept_event()
+
+# Irregular pools and small hanging droplets, drawn in the same canvas as the type.
+func _ink_outline(r: Rect2, ink_color: Color) -> void:
+    var edge := r.grow(3.0)
+    draw_rect(edge,Color(ink_color,0.07))
+    draw_rect(edge,Color(ink_color,0.85),false,2.0)
+    for k in range(4):
+        var x := edge.position.x + 7.0 + float(k) * (edge.size.x - 14.0) / 4.0
+        var y := edge.end.y + float((k * 7 + 3) % 5)
+        draw_circle(Vector2(x,y),2.0 + float(k % 2),Color(ink_color,0.74))
+        draw_line(Vector2(x,edge.end.y),Vector2(x,y+3.0+float(k % 3)*3.0),Color(ink_color,0.6),1.8,true)
+
+func _ink_join(center: Vector2, ink_color: Color, strength: float) -> void:
+    var alpha := clampf(strength,0.15,1.0)
+    draw_circle(center,8.0,Color(ink_color,0.38*alpha))
+    draw_circle(center+Vector2(3,1),5.0,Color(ink_color,0.85*alpha))
+    draw_circle(center+Vector2(-4,-2),3.0,Color(ink_color,0.75*alpha))
+    for k in range(3):
+        var dx := float(k-1)*5.0
+        var length := 7.0 + float((k*7+3)%9)
+        draw_line(center+Vector2(dx,3),center+Vector2(dx,length),Color(ink_color,0.7*alpha),2.0,true)
+        draw_circle(center+Vector2(dx,length),2.5,Color(ink_color,0.7*alpha))
+
+# Procedurally generated dry paper friction: no external audio asset needed.
+func _make_paper_audio() -> void:
+    paper_audio = AudioStreamPlayer.new()
+    add_child(paper_audio)
+    var sample_rate := 22050
+    var sample_count := 2600
+    var samples := PackedByteArray()
+    samples.resize(sample_count * 2)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 1701701
+    var previous := 0.0
+    for n in range(sample_count):
+        var envelope := pow(1.0 - float(n) / float(sample_count),1.6)
+        var noise := rng.randf_range(-1.0,1.0)
+        previous = lerpf(previous,noise,0.38)
+        var value := int(clampf(previous*envelope*0.36,-1.0,1.0)*32767.0)
+        if value < 0:
+            value += 65536
+        samples[n*2] = value & 255
+        samples[n*2+1] = (value >> 8) & 255
+    var wav := AudioStreamWAV.new()
+    wav.format = AudioStreamWAV.FORMAT_16_BITS
+    wav.mix_rate = sample_rate
+    wav.stereo = false
+    wav.data = samples
+    paper_audio.stream = wav
+
+func _paper_sound(volume: float) -> void:
+    if paper_audio == null:
+        return
+    paper_audio.volume_db = linear_to_db(volume)
+    paper_audio.pitch_scale = randf_range(0.86,1.13)
+    paper_audio.play()
