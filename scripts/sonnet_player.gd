@@ -12,8 +12,8 @@ const OXBLOOD := Color("#a4484d")
 const STAGE := Rect2(105, 105, 775, 585)
 const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
-const INTRO_HOLD := 2.4
-const INTRO_FLY := 2.1
+const INTRO_HOLD := 4.5
+const INTRO_FLY := 7.0
 const TRAY_ROWS := 9
 const TRAY_COLS := 2
 const TRAY_PAGE_SIZE := TRAY_ROWS * TRAY_COLS
@@ -63,12 +63,14 @@ var drag_sound_cooldown := 0.0
 var ink_time := 0.0
 var intro_elapsed := 0.0
 var intro_active := true
+var intro_flight_started := false
 var tray_page := 0
 var tray_indices: Array[int] = []
 
 func _process(delta: float) -> void:
 	if intro_active:
 		intro_elapsed += delta
+		queue_redraw()
 		if intro_elapsed >= INTRO_HOLD + INTRO_FLY:
 			intro_active = false
 			for i in range(pieces.size()):
@@ -133,7 +135,12 @@ func _scatter() -> void:
 
 func _visible_piece(i: int) -> bool:
 	if intro_active:
-		return true
+		if intro_elapsed <= INTRO_HOLD:
+			return true
+		var fraction := clampf((intro_elapsed - INTRO_HOLD) / INTRO_FLY, 0.0, 1.0)
+		var delay := float(i % 31) / 52.0
+		var t := clampf((fraction - delay) / (1.0 - delay), 0.0, 1.0)
+		return int(pieces[i]["tray_page"]) == 0 or t < 0.83
 	if i == dragging or bool(pieces[i]["raised"]):
 		return true
 	return int(pieces[i]["tray_page"]) == tray_page
@@ -144,10 +151,11 @@ func _intro_position(i: int) -> Vector2:
 	if intro_elapsed <= INTRO_HOLD:
 		return original
 	var fraction := clampf((intro_elapsed - INTRO_HOLD) / INTRO_FLY, 0.0, 1.0)
-	var delay := float(i % 17) / 35.0
+	var delay := float(i % 31) / 52.0
 	var t := clampf((fraction - delay) / (1.0 - delay), 0.0, 1.0)
 	t = t * t * (3.0 - 2.0 * t)
-	return original.lerp(destination, t)
+	var lift := sin(t * PI) * (12.0 + float(i % 9) * 5.0)
+	return original.lerp(destination, t) + Vector2(0.0, -lift)
 
 func _scale() -> float:
 	return maxf(0.001, minf(size.x / 1280.0, size.y / 720.0))
@@ -233,12 +241,10 @@ func _page() -> void:
 	# The seventh rhyme pair is the closing couplet, not a seven-line poem.
 	for line_index in range(14):
 		var baseline_y := 154.0 + float(line_index) * 39.0
-		var line_color := Color(INK, 0.15 if line_index == 12 else 0.085)
+		var line_color := Color(INK, 0.085 if line_index == 12 else 0.038)
 		draw_line(Vector2(129,baseline_y),Vector2(862,baseline_y),line_color,1.0)
-		if not intro_active:
-			_write(str(line_index + 1).pad_zeros(2),Vector2(109,baseline_y - 4.0),11,Color(INK,0.3))
 		if line_index == 3 or line_index == 7 or line_index == 11:
-			draw_line(Vector2(129,baseline_y + 8.0),Vector2(862,baseline_y + 8.0),Color(INK,0.12),1.0)
+			draw_line(Vector2(129,baseline_y + 8.0),Vector2(862,baseline_y + 8.0),Color(INK,0.065),1.0)
 	if show_help and not intro_active and not _has_raised() and dragging < 0:
 		_write("Lift a word from the ink at right.",Vector2(300,385),22,Color(INK,0.28))
 	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
