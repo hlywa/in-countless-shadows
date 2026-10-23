@@ -80,7 +80,13 @@ func _used() -> int:
 func _draw() -> void:
 	regions.clear()
 	draw_rect(Rect2(Vector2.ZERO, size), PAPER)
+	# Draw a fixed diagnostic marker in untransformed local coordinates.
+	# This distinguishes a rendering/layout issue from a text-color issue.
+	draw_rect(Rect2(12, 12, 110, 28), Color("#dc2537"))
+	draw_string(ThemeDB.fallback_font, Vector2(18, 32), "DRAW ACTIVE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 	var sc := minf(size.x / 1280.0, size.y / 720.0)
+	if sc <= 0.0:
+		return
 	var offset := (size - Vector2(1280, 720) * sc) * 0.5
 	draw_set_transform(offset, 0.0, Vector2(sc, sc))
 	_draw_page()
