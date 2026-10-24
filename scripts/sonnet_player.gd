@@ -12,7 +12,7 @@ const OXBLOOD := Color("#a4484d")
 const STAGE := Rect2(105, 105, 775, 585)
 const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
-const INTRO_HOLD := 4.5
+const INTRO_HOLD := 2.5
 const INTRO_FLY := 7.0
 const TRAY_ROWS := 9
 const TRAY_COLS := 2
@@ -59,6 +59,9 @@ var mouse_at := Vector2.ZERO
 var discoveries: Array[String] = []
 var show_help := true
 var paper_audio: AudioStreamPlayer
+var rustle_voices: Array[AudioStreamPlayer] = []
+var rustle_voice_index := 0
+var intro_rustle_clock := 0.0
 var drag_sound_cooldown := 0.0
 var ink_time := 0.0
 var intro_elapsed := 0.0
@@ -70,6 +73,11 @@ var tray_indices: Array[int] = []
 func _process(delta: float) -> void:
 	if intro_active:
 		intro_elapsed += delta
+		if intro_elapsed >= INTRO_HOLD and intro_elapsed < INTRO_HOLD + INTRO_FLY:
+			intro_rustle_clock += delta
+			if intro_rustle_clock >= 0.17:
+				intro_rustle_clock = 0.0
+				_paper_sound(0.035)
 		queue_redraw()
 		if intro_elapsed >= INTRO_HOLD + INTRO_FLY:
 			intro_active = false
@@ -251,8 +259,13 @@ func _page() -> void:
 	if not intro_active:
 		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(908,684), 17, INK)
 	else:
-		_write("SONNET XVII", Vector2(110,106), 14, Color(INK,0.45))
+		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
+	if not intro_active:
+		_write("˘ /  METER", Vector2(128,112), 12, TEAL)
+		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
+		_write("⌣  SHARED VERSE", Vector2(368,112), 12, VIOLET)
+		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
 		if intro_active or not bool(pieces[i]["raised"]) or i == dragging:
@@ -314,6 +327,11 @@ func _draw_piece(i: int) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if intro_active:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			intro_elapsed = maxf(intro_elapsed, INTRO_HOLD)
+			_paper_sound(0.065)
+			queue_redraw()
+			accept_event()
 		return
 	if event is InputEventMouseMotion:
 		mouse_at = _local_point(event.position)
@@ -350,7 +368,7 @@ func _gui_input(event: InputEvent) -> void:
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
 					show_help = false
-					_paper_sound(0.14)
+					_paper_sound(0.07)
 					accept_event()
 					queue_redraw()
 					return
@@ -382,7 +400,7 @@ func _gui_input(event: InputEvent) -> void:
 				var count := _assembled_syllables_before(id) + int(pieces[id]["syllables"])
 				if count == 10:
 					discoveries.append("TEN SYLLABLES · a pentameter-length sequence (stress remains open)")
-			_paper_sound(0.24)
+			_paper_sound(0.09)
 			if not bool(pieces[id]["raised"]):
 				pieces[id]["pos"] = pieces[id]["tray_pos"]
 				discoveries.append("Return to the ink. Lift another word.")
@@ -410,36 +428,44 @@ func _ink_join(center: Vector2, ink_color: Color, strength: float) -> void:
 		draw_line(center+Vector2(dx,3),center+Vector2(dx,length),Color(ink_color,0.7*alpha),2.0,true)
 		draw_circle(center+Vector2(dx,length),2.5,Color(ink_color,0.7*alpha))
 
-# Procedurally generated dry paper friction: no external audio asset needed.
+# Soft, low-passed paper friction shared by flying type and manual placement.
+# Multiple voices let the tiny rustles overlap instead of cutting one another off.
 func _make_paper_audio() -> void:
-	paper_audio = AudioStreamPlayer.new()
-	add_child(paper_audio)
 	var sample_rate := 22050
-	var sample_count := 2600
+	var sample_count := 6200
 	var samples := PackedByteArray()
 	samples.resize(sample_count * 2)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1701701
 	var previous := 0.0
 	for n in range(sample_count):
-		var envelope := pow(1.0 - float(n) / float(sample_count),1.6)
-		var noise := rng.randf_range(-1.0,1.0)
-		previous = lerpf(previous,noise,0.38)
-		var value := int(clampf(previous*envelope*0.36,-1.0,1.0)*32767.0)
+		var phase := float(n) / float(sample_count)
+		var envelope := pow(sin(phase * PI), 1.6)
+		var noise := rng.randf_range(-1.0, 1.0)
+		previous = lerpf(previous, noise, 0.075)
+		var grain := 0.74 + 0.26 * sin(phase * TAU * 13.0)
+		var value := int(clampf(previous * envelope * grain * 0.18, -1.0, 1.0) * 32767.0)
 		if value < 0:
 			value += 65536
-		samples[n*2] = value & 255
-		samples[n*2+1] = (value >> 8) & 255
+		samples[n * 2] = value & 255
+		samples[n * 2 + 1] = (value >> 8) & 255
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = sample_rate
 	wav.stereo = false
 	wav.data = samples
-	paper_audio.stream = wav
+	for i in range(6):
+		var voice := AudioStreamPlayer.new()
+		voice.stream = wav
+		add_child(voice)
+		rustle_voices.append(voice)
+	paper_audio = rustle_voices[0]
 
 func _paper_sound(volume: float) -> void:
-	if paper_audio == null:
+	if rustle_voices.is_empty():
 		return
-	paper_audio.volume_db = linear_to_db(volume)
-	paper_audio.pitch_scale = randf_range(0.86,1.13)
-	paper_audio.play()
+	var voice: AudioStreamPlayer = rustle_voices[rustle_voice_index]
+	rustle_voice_index = (rustle_voice_index + 1) % rustle_voices.size()
+	voice.volume_db = linear_to_db(maxf(volume, 0.001))
+	voice.pitch_scale = randf_range(0.83, 1.06)
+	voice.play()
