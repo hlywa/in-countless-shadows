@@ -443,7 +443,6 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	var filled := 0
 	var turns: Array[int] = []
 	var echoes: Dictionary = {}
-	var all_words: Array[String] = []
 	var arranged_words: Array = []
 	for n in range(14):
 		var ids := _line_words(n,intact)
@@ -454,7 +453,6 @@ func _analyze_composition(intact: bool) -> Dictionary:
 			count += int(pieces[id]["syllables"])
 			var word := str(pieces[id]["word"])
 			words.append(word)
-			all_words.append(word)
 			var key := _echo_key(word)
 			if not echoes.has(key):
 				echoes[key] = []
@@ -770,6 +768,7 @@ func _gui_input(event: InputEvent) -> void:
 				if _visible_piece(i) and _rect(i).grow(4).has_point(p):
 					var old_line := composition.find_line(i)
 					drag_snapshot = _snapshot()
+					mouse_at = p
 					composition.remove_word(i)
 					dragging = i
 					hover = i
