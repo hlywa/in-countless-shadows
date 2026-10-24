@@ -14,6 +14,7 @@ const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
 const INTRO_HOLD := 2.5
 const INTRO_FLY := 7.0
+const VOLTA_LINE := 12 # Zero-based: "But were some child..." is line 13.
 const TRAY_ROWS := 9
 const TRAY_COLS := 2
 const TRAY_PAGE_SIZE := TRAY_ROWS * TRAY_COLS
@@ -207,6 +208,111 @@ func _relation_ids(left_id: int, right_id: int) -> Dictionary:
 		return {"color":VIOLET,"label":"SHARED LINE","symbol":"⌣"}
 	return {}
 
+# One formal vocabulary serves the intact poem and new compositions.
+# Rhyme is a provisional sound-family lexicon, not a full phonetic engine.
+const RHYME_FAMILIES := {
+	"come":"UM", "tomb":"UM", "deserts":"ERTS", "parts":"ARTS",
+	"eyes":"EYES", "lies":"EYES", "graces":"ACES", "faces":"ACES",
+	"age":"AGE", "rage":"AGE", "tongue":"UNG", "song":"ONG",
+	"time":"IME", "rhyme":"IME"
+}
+func _rhyme_family(word: String) -> String:
+	return str(RHYME_FAMILIES.get(_plain(word), ""))
+
+func _on_stage_line(i: int) -> int:
+	var center_y := _rect(i).get_center().y
+	var line_number := roundi((center_y - 142.5) / 39.0)
+	if line_number < 0 or line_number >= 14:
+		return -1
+	if absf(center_y - (142.5 + float(line_number) * 39.0)) > 19.0:
+		return -1
+	return line_number
+
+func _line_words(line_number: int, intact: bool) -> Array[int]:
+	var result: Array[int] = []
+	for i in range(pieces.size()):
+		if intact:
+			if int(pieces[i]["line"]) == line_number:
+				result.append(i)
+		elif bool(pieces[i]["raised"]) and _on_stage_line(i) == line_number:
+			result.append(i)
+	result.sort_custom(func(a: int, b: int) -> bool:
+		return _rect(a).position.x < _rect(b).position.x)
+	return result
+
+func _line_syllables(line_number: int, intact: bool) -> int:
+	var total := 0
+	for id in _line_words(line_number, intact):
+		total += int(pieces[id]["syllables"])
+	return total
+
+func _line_ending(line_number: int, intact: bool) -> String:
+	var words := _line_words(line_number, intact)
+	if words.is_empty():
+		return ""
+	return str(pieces[words[words.size() - 1]]["word"])
+
+func _draw_formal_overlay(intact: bool) -> void:
+	# Editorial marks are suggestions. They do not score interpretation.
+	var pairs := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
+	for pair in pairs:
+		var a: int = pair[0]
+		var b: int = pair[1]
+		var aw := _line_ending(a,intact)
+		var bw := _line_ending(b,intact)
+		if aw.is_empty() or bw.is_empty():
+			continue
+		var family_a := _rhyme_family(aw)
+		var family_b := _rhyme_family(bw)
+		var matched := not family_a.is_empty() and family_a == family_b
+		# A dotted editorial question on the intact text also acknowledges slant rhyme.
+		if intact or matched:
+			var x := 866.0
+			var ya := 145.0 + float(a) * 39.0
+			var yb := 145.0 + float(b) * 39.0
+			draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(COPPER,0.7),1.4)
+			draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(COPPER,0.43),1.1)
+			draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(COPPER,0.7),1.4)
+			_write("≈" if matched else "≈?",Vector2(x+11,(ya+yb)*0.5+5),12,COPPER)
+	for line_number in range(14):
+		var syllables := _line_syllables(line_number,intact)
+		if syllables == 0:
+			continue
+		var ids := _line_words(line_number,intact)
+		for id in ids:
+			var word_rect := _rect(id)
+			var before := 0
+			for other in ids:
+				if other == id:
+					break
+				before += int(pieces[other]["syllables"])
+			var n := int(pieces[id]["syllables"])
+			var marks := ""
+			for k in range(n):
+				marks += ("˘" if (before+k)%2 == 0 else "/")
+				if k < n-1:
+					marks += " "
+			_write(marks,word_rect.position + Vector2(4,38 if intact else 49),11,Color(TEAL,0.83))
+		if syllables == 10:
+			draw_circle(Vector2(118,144.0+float(line_number)*39.0),2.4,TEAL)
+	# The source volta is at line 13: "But were some child..."
+	# A marginal proofreader's hook, not a correctness check.
+	if intact:
+		_draw_volta_mark(VOLTA_LINE, true)
+	else:
+		# Mark the inherited location only when the player places "But" there.
+		for id in _line_words(VOLTA_LINE,false):
+			if _plain(str(pieces[id]["word"])) == "but":
+				_draw_volta_mark(VOLTA_LINE, false)
+				break
+
+func _draw_volta_mark(line_number: int, intact: bool) -> void:
+	var cy := 142.0 + float(line_number) * 39.0
+	var x := 112.0
+	draw_arc(Vector2(x,cy),14.0,-PI*0.62,PI*0.64,22,Color(OXBLOOD,0.8),2.0,true)
+	draw_line(Vector2(x+10,cy+10),Vector2(x+16,cy+16),Color(OXBLOOD,0.8),2.0,true)
+	_write("TURN?" if not intact else "VOLTA",Vector2(133,cy-18),11,OXBLOOD)
+
 func _assembled_syllables_before(piece_id: int) -> int:
 	var count := 0
 	var target := _rect(piece_id)
@@ -266,6 +372,8 @@ func _page() -> void:
 		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
 		_write("⌣  SHARED VERSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
+	# The intact poem and the recomposed poem use the same annotation engine.
+	_draw_formal_overlay(intro_active and intro_elapsed <= INTRO_HOLD)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
 		if intro_active or not bool(pieces[i]["raised"]) or i == dragging:
@@ -311,8 +419,7 @@ func _draw_piece(i: int) -> void:
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
 	_write(word,r.position+Vector2(4,23 if intro_active or not on_page else 29),20 if intro_active or not on_page else 27,INK,true)
-	if on_page:
-		_write(_assembled_meter(i),r.position+Vector2(12,49),13,TEAL)
+	# Scansion marks are drawn centrally by _draw_formal_overlay().
 	if i == dragging:
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]):
