@@ -143,6 +143,8 @@ func _ready() -> void:
 	gothic = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") else ThemeDB.fallback_font
 	body_font = load("res://assets/fonts/EB_Garamond/EBGaramond-VariableFont_wght.ttf") if ResourceLoader.exists("res://assets/fonts/EB_Garamond/EBGaramond-VariableFont_wght.ttf") else gothic
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	focus_mode = Control.FOCUS_ALL
+	grab_focus()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_scatter()
 	_make_paper_audio()
@@ -374,6 +376,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	var filled := 0
 	var turns: Array[int] = []
 	var echoes: Dictionary = {}
+	var all_words: Array[String] = []
 	for n in range(14):
 		var ids := _line_words(n,intact)
 		var count := 0
@@ -383,6 +386,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 			count += int(pieces[id]["syllables"])
 			var word := str(pieces[id]["word"])
 			words.append(word)
+			all_words.append(word)
 			var key := _echo_key(word)
 			if not echoes.has(key):
 				echoes[key] = []
@@ -435,12 +439,14 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	# Completion is a composition-state fact, not a verdict on poetic quality.
 	# The formal candidate remains provisional when rhymes or stress are uncertain.
 	var complete := used == pieces.size() and filled == 14
+	var hypotheses := PoemData.reading_hypotheses(all_words)
 	var tentative_rhymes := 0
 	for pair in pairs:
 		if str(pair["evidence"]) == "possible":
 			tentative_rhymes += 1
 	return {"lines":lines,"starts":starts,"filled":filled,"ten":ten,"rhymes":matched,
 		"known":known,"turns":turns,"pairs":pairs,"echoes":echoes,"used":used,
+		"hypotheses":hypotheses,
 		"rhyme_obligations":rhyme_obligations,"meter_candidates":metrical_candidates,"stress_verified":verified_stress,
 		"tentative_rhymes":tentative_rhymes,
 		"complete":complete,"formal":complete and ten == 14 and matched == 7}
@@ -665,7 +671,10 @@ func _gui_input(event: InputEvent) -> void:
 					discoveries.append("RHYME PAIRS · %d / 7" % int(report["rhymes"]))
 				if not report["rhyme_obligations"].is_empty():
 					var obligation: Dictionary = report["rhyme_obligations"][0]
-					discoveries.append("RHYME OPEN · lines %d and %d" % [int(obligation["a"])+1,int(obligation["b"])+1])
+					var target_word := str(obligation["left"]) if not str(obligation["left"]).is_empty() else str(obligation["right"])
+					discoveries.append("LINES %d / %d · seek a rhyme for %s" % [int(obligation["a"])+1,int(obligation["b"])+1,target_word])
+				if not report["hypotheses"].is_empty():
+					discoveries.append(str(report["hypotheses"][0]))
 			_paper_sound(0.09)
 			queue_redraw()
 			accept_event()
