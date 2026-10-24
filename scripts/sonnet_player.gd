@@ -200,7 +200,7 @@ func _pair_relationships(model: Dictionary, left_id: int, right_id: int) -> Arra
 	if _echo_key(a) == _echo_key(b):
 		result.append({"color":VIOLET,"label":"WORD ECHO","symbol":"↺"})
 	var pulse: int = int(model["starts"].get(left_id,0)) + int(pieces[left_id]["syllables"])
-	result.append({"color":TEAL,"label":"METRICAL POSITION?","symbol":"˘ /" if pulse % 2 == 0 else "˘"})
+	result.append({"color":TEAL,"label":"SYLLABLE POSITION %d · STRESS HYPOTHESIS" % pulse,"symbol":"?"})
 	result.append({"color":VIOLET,"label":"SHARED VERSE","symbol":"⌣"})
 	return result
 
@@ -331,7 +331,6 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		used += ids.size()
 		if not ids.is_empty():
 			filled += 1
-			var first := _plain(words[0]).trim_prefix("'")
 			var turn := PoemData.turn_evidence([],words,n)
 			if bool(turn["possible"]):
 				turns.append(n)
