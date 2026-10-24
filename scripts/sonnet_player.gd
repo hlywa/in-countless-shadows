@@ -194,7 +194,7 @@ func _plain(word: String) -> String:
 	return cleaned
 
 func _syllables(word: String) -> int:
-	return int(SYLLABLES.get(_plain(word), 1))
+	return PoemData.syllable_count(word)
 
 # Analyze neighboring pieces using their provenance and the syllabic sequence
 # assembled on the page. Stress is presented as an iambic hypothesis, not a fact.
@@ -233,10 +233,10 @@ const RHYME_FAMILIES := {
 	"time":"IME", "rhyme":"IME"
 }
 func _rhyme_family(word: String) -> String:
-	return str(RHYME_FAMILIES.get(_plain(word), ""))
+	return PoemData.sound_family(word)
 
 func _echo_key(word: String) -> String:
-	var plain := _plain(word).trim_prefix("\u0027")
+	var plain := PoemData.normalize_word(word).trim_prefix("\u0027")
 	for group in ECHO_GROUPS:
 		if plain in group:
 			return str(group[0])
@@ -382,7 +382,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		var fa: String = lines[a]["family"]
 		var fb: String = lines[b]["family"]
 		var is_known := not fa.is_empty() and not fb.is_empty()
-		var is_match := is_known and fa == fb
+		var is_match := PoemData.rhyme_evidence(str(lines[a]["ending"]), str(lines[b]["ending"])) != "unknown"
 		if is_known:
 			known += 1
 		if is_match:
