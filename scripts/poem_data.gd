@@ -155,19 +155,42 @@ static func metrical_evidence(words: Array[String]) -> Dictionary:
 		"stress_verified":false, "template_fit":uncertain == 0 and deviations == 0 and pattern.length() == 10}
 
 # Interpretive hypotheses are invitations to read, never completion gates.
-static func reading_hypotheses(words: Array[String]) -> Array[String]:
-	var normalized: Array[String] = []
-	for word in words:
-		normalized.append(normalize_word(word))
+# Interpretations depend on where words are placed, not merely their presence.
+# These are invitations, never scores or authoritative readings.
+static func reading_hypotheses(lines: Array) -> Array[String]:
+	var normalized_lines: Array = []
+	for line in lines:
+		var words: Array[String] = []
+		for word in line:
+			words.append(normalize_word(str(word)))
+		normalized_lines.append(words)
 	var readings: Array[String] = []
-	if "life" in normalized and "tomb" in normalized:
-		readings.append("Preservation or burial? The verse may do both.")
-	if "truth" in normalized and "lies" in normalized:
-		readings.append("Testimony and invention compete for authority.")
-	if "child" in normalized and "rhyme" in normalized:
-		readings.append("What survives: a descendant, a poem, or both?")
-	if "time" in normalized and "age" in normalized:
-		readings.append("Time can preserve and erode at once.")
+	for n in range(normalized_lines.size()):
+		var words: Array = normalized_lines[n]
+		if "life" in words and "tomb" in words:
+			readings.append("Line %d: life shares a line with the tomb — shelter or confinement?" % (n+1))
+		if "truth" in words and "lies" in words:
+			readings.append("Line %d: truth and lies confront one another." % (n+1))
+		if "child" in words and "rhyme" in words:
+			readings.append("Line %d: inheritance and poetry occupy the same breath." % (n+1))
+	if normalized_lines.size() == 14:
+		var opening: Array = []
+		for n in range(4):
+			opening.append_array(normalized_lines[n])
+		var closing: Array = []
+		for n in range(12,14):
+			closing.append_array(normalized_lines[n])
+		if "tomb" in opening and "life" in closing:
+			readings.append("The couplet answers the opening tomb with life — does it resolve the loss?")
+		if "lies" in opening and "truth" in closing:
+			readings.append("Truth arrives after the accusation of lies — who has authority?")
+		if "child" in closing and "rhyme" in closing:
+			readings.append("The couplet holds child and rhyme together as rival forms of survival.")
+		var earlier: Array = []
+		for n in range(12):
+			earlier.append_array(normalized_lines[n])
+		if "time" in earlier and "time" in closing:
+			readings.append("Time returns in the couplet, altered by its position.")
 	return readings
 
 static func turn_evidence(previous_words: Array[String], current_words: Array[String], line_index: int) -> Dictionary:
