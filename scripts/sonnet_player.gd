@@ -249,16 +249,17 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 	if intro_active and not intact:
 		return
 	for pair in model["pairs"]:
-		if not intact and not bool(pair["match"]):
+		if not intact and str(pair["evidence"]) == "unknown" and str(model["lines"][int(pair["a"])]["ending"]).is_empty() and str(model["lines"][int(pair["b"])]["ending"]).is_empty():
 			continue
 		var a: int = pair["a"]
 		var b: int = pair["b"]
 		var x := 866.0
 		var ya := 145.0 + float(a)*39.0
 		var yb := 145.0 + float(b)*39.0
-		draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(COPPER,0.7),1.4)
-		draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(COPPER,0.43),1.1)
-		draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(COPPER,0.7),1.4)
+		var relation_color := COPPER if bool(pair["match"]) else Color(COPPER,0.32)
+		draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(relation_color,0.7),1.4)
+		draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(relation_color,0.43),1.1)
+		draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(relation_color,0.7),1.4)
 		_write("≈?" if str(pair["evidence"]) == "possible" else ("≈" if bool(pair["match"]) else "≈?"),Vector2(x+11,(ya+yb)*0.5+5),12,COPPER)
 	for n in range(14):
 		var line: Dictionary = model["lines"][n]
@@ -274,8 +275,10 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 			var before: int = int(model["starts"].get(int(id),0))
 			var count := int(pieces[int(id)]["syllables"])
 			var marks := ""
+			var stress: String = PoemData.stress_pattern(str(pieces[int(id)]["word"]))
 			for k in range(count):
-				marks += "·" if (before+k)%2 == 0 else "˙"
+				var symbol := stress.substr(k,1) if k < stress.length() else "?"
+				marks += "˘" if symbol == "0" else ("/" if symbol == "1" else "?")
 				if k < count-1:
 					marks += " "
 			_write(marks,rect.position+Vector2(4,36),11,Color(TEAL,0.83))
@@ -329,7 +332,8 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		if not ids.is_empty():
 			filled += 1
 			var first := _plain(words[0]).trim_prefix("'")
-			if first in ["but","yet","though","so","then"] and n > 0:
+			var turn := PoemData.turn_evidence([],words,n)
+			if bool(turn["possible"]):
 				turns.append(n)
 		if count == 10:
 			ten += 1
@@ -340,12 +344,21 @@ func _analyze_composition(intact: bool) -> Dictionary:
 			var w: String = words[k]
 			if w.ends_with(",") or w.ends_with(";") or w.ends_with(":") or w.ends_with("?") or w.ends_with("!"):
 				internal_pauses.append(k)
-		lines.append({"ids":ids,"syllables":count,"family":_rhyme_family(ending),
+		var meter := PoemData.metrical_evidence(words)
+		lines.append({"ids":ids,"syllables":count,"meter":meter,"family":_rhyme_family(ending),
 			"ending":ending,"end_stopped":end_stopped,"internal_pauses":internal_pauses,
 			"has_words":not ids.is_empty(),"group":0 if n < 4 else (1 if n < 8 else (2 if n < 12 else 3))})
 	var pairs: Array[Dictionary] = []
 	var matched := 0
 	var known := 0
+	var rhyme_obligations: Array[Dictionary] = []
+	var metrical_candidates := 0
+	var verified_stress := 0
+	for line in lines:
+		if bool(line["meter"]["candidate"]):
+			metrical_candidates += 1
+		if bool(line["meter"]["stress_verified"]):
+			verified_stress += 1
 	for positions in RHYME_PAIRS:
 		var a: int = positions[0]
 		var b: int = positions[1]
@@ -359,9 +372,12 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		if is_match:
 			matched += 1
 		pairs.append({"a":a,"b":b,"known":is_known,"match":is_match,"evidence":evidence})
+		if evidence == "unknown" and (not str(lines[a]["ending"]).is_empty() or not str(lines[b]["ending"]).is_empty()):
+			rhyme_obligations.append({"a":a,"b":b,"left":str(lines[a]["ending"]),"right":str(lines[b]["ending"])})
 	var complete := used == pieces.size() and filled == 14
 	return {"lines":lines,"starts":starts,"filled":filled,"ten":ten,"rhymes":matched,
 		"known":known,"turns":turns,"pairs":pairs,"echoes":echoes,"used":used,
+		"rhyme_obligations":rhyme_obligations,"meter_candidates":metrical_candidates,"stress_verified":verified_stress,
 		"complete":complete,"formal":complete and ten == 14 and matched == 7}
 
 func _evaluate_form(intact: bool) -> Dictionary:
@@ -376,7 +392,7 @@ func _draw_form_report(model: Dictionary) -> void:
 	_write("LINES  %d / 14" % int(model["filled"]),Vector2(left,595),13,TEAL)
 	_write("RHYME  %d / 7" % int(model["rhymes"]),Vector2(right,595),13,COPPER)
 	_write("10 SYLL  %d / 14" % int(model["ten"]),Vector2(left,617),13,TEAL)
-	_write("KNOWN  %d / 7" % int(model["known"]),Vector2(right,617),13,COPPER)
+	_write("OPEN  %d / 7" % int(model["rhyme_obligations"].size()),Vector2(right,617),13,COPPER)
 	if bool(model["formal"]):
 		_write("FORMAL CANDIDATE · STRESS AND MEANING OPEN.",Vector2(110,703),15,OXBLOOD)
 	elif bool(model["complete"]):
@@ -452,7 +468,7 @@ func _page() -> void:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
 	if not intro_active:
-		_write("· ˙  SYLLABLES", Vector2(128,112), 12, TEAL)
+		_write("˘ / ?  STRESS HYPOTHESIS", Vector2(128,112), 12, TEAL)
 		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
 		_write("↺  ECHO / PAUSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
@@ -610,6 +626,9 @@ func _gui_input(event: InputEvent) -> void:
 				var report := _evaluate_form(false)
 				if int(report["rhymes"]) > 0:
 					discoveries.append("RHYME PAIRS · %d / 7" % int(report["rhymes"]))
+				if not report["rhyme_obligations"].is_empty():
+					var obligation: Dictionary = report["rhyme_obligations"][0]
+					discoveries.append("RHYME OPEN · lines %d and %d" % [int(obligation["a"])+1,int(obligation["b"])+1])
 			_paper_sound(0.09)
 			if not bool(pieces[id]["raised"]):
 				pieces[id]["pos"] = pieces[id]["tray_pos"]
