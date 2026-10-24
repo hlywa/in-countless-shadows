@@ -68,7 +68,7 @@ func _process(delta: float) -> void:
 	var t := clampf(elapsed / REVEAL_DURATION,0.0,1.0)
 	# Each letter receives several directional reveals, followed by an ink-settling finish.
 	ink_material.set_shader_parameter("progress",t)
-	var buttons := smoothstep(2.2,3.1,elapsed)
+	var buttons := smoothstep(1.35,2.05,elapsed)
 	begin_label.modulate.a = buttons
 	settings_label.modulate.a = buttons
 	if elapsed >= REVEAL_DURATION:
