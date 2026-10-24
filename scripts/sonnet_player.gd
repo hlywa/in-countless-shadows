@@ -256,7 +256,7 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 		var x := 866.0
 		var ya := 145.0 + float(a)*39.0
 		var yb := 145.0 + float(b)*39.0
-		var relation_color := COPPER if bool(pair["match"]) else Color(COPPER,0.32)
+		var relation_color: Color = COPPER if bool(pair["match"]) else Color(COPPER,0.32)
 		draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(relation_color,0.7),1.4)
 		draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(relation_color,0.43),1.1)
 		draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(relation_color,0.7),1.4)
@@ -277,7 +277,7 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 			var marks := ""
 			var stress: String = PoemData.stress_pattern(str(pieces[int(id)]["word"]))
 			for k in range(count):
-				var symbol := stress.substr(k,1) if k < stress.length() else "?"
+				var symbol: String = stress.substr(k,1) if k < stress.length() else "?"
 				marks += "˘" if symbol == "0" else ("/" if symbol == "1" else "?")
 				if k < count-1:
 					marks += " "
@@ -331,7 +331,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		used += ids.size()
 		if not ids.is_empty():
 			filled += 1
-			var turn := PoemData.turn_evidence([],words,n)
+			var turn: Dictionary = PoemData.turn_evidence([],words,n)
 			if bool(turn["possible"]):
 				turns.append(n)
 		if count == 10:
@@ -343,7 +343,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 			var w: String = words[k]
 			if w.ends_with(",") or w.ends_with(";") or w.ends_with(":") or w.ends_with("?") or w.ends_with("!"):
 				internal_pauses.append(k)
-		var meter := PoemData.metrical_evidence(words)
+		var meter: Dictionary = PoemData.metrical_evidence(words)
 		lines.append({"ids":ids,"syllables":count,"meter":meter,"family":_rhyme_family(ending),
 			"ending":ending,"end_stopped":end_stopped,"internal_pauses":internal_pauses,
 			"has_words":not ids.is_empty(),"group":0 if n < 4 else (1 if n < 8 else (2 if n < 12 else 3))})
@@ -364,7 +364,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		var fa: String = lines[a]["family"]
 		var fb: String = lines[b]["family"]
 		var is_known := not fa.is_empty() and not fb.is_empty()
-		var evidence := PoemData.rhyme_evidence(str(lines[a]["ending"]), str(lines[b]["ending"]))
+		var evidence: String = PoemData.rhyme_evidence(str(lines[a]["ending"]), str(lines[b]["ending"]))
 		var is_match := evidence == "supported" or evidence == "possible"
 		if is_known:
 			known += 1
@@ -411,27 +411,6 @@ func _reflow_line(line_number: int) -> void:
 	for id in ids:
 		pieces[id]["pos"] = Vector2(x,y)
 		x += float(pieces[id]["width"]) + 4.0
-
-func _assembled_syllables_before(piece_id: int) -> int:
-	var count := 0
-	var target := _rect(piece_id)
-	for i in range(pieces.size()):
-		if i == piece_id or not bool(pieces[i]["raised"]):
-			continue
-		var r := _rect(i)
-		if absf(r.get_center().y - target.get_center().y) < 28.0 and r.position.x < target.position.x:
-			count += int(pieces[i]["syllables"])
-	return count
-
-func _assembled_meter(piece_id: int) -> String:
-	var count := _assembled_syllables_before(piece_id)
-	var n := int(pieces[piece_id]["syllables"])
-	var result := ""
-	for k in range(n):
-		result += "˘" if (count + k) % 2 == 0 else "/"
-		if k < n - 1:
-			result += " "
-	return result
 
 func _neighbor(i: int, j: int) -> bool:
 	var a := _rect(i)
