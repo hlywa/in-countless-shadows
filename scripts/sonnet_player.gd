@@ -38,19 +38,7 @@ const SONNET_LINES := [
 ]
 const RHYME_PAIRS := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
 const RHYME_SCHEME := ["A","B","A","B","C","D","C","D","E","F","E","F","G","G"]
-const SYLLABLES := {
-	"believe":2, "deserts":2, "heaven":2, "beauty":2, "numbers":2,
-	"number":2, "graces":2, "poet":2, "heavenly":3, "earthly":2,
-	"faces":2, "papers":2, "yellow'd":2, "scorn'd":1, "stretchèd":2,
-	"meter":2, "antique":2, "alive":2, "twice":1, "would":1,
-	"touches":2, "less":1, "term'd":1, "rage":1, "should":1
-}
-# These pairings are interpretive suggestions, deliberately distinct from prosodic rules.
-const ECHO_GROUPS := [["number","numbers"],["poet","poet\u0027s"],["touches","touch\u0027d"],["age","age"],["time","time"]]
-const TENSIONS := [
-	["truth","lies"], ["beauty","eyes"], ["child","rhyme"],
-	["verse","truth"], ["poet","lies"], ["life","tomb"]
-]
+const TENSIONS := PoemData.TENSIONS
 var gothic: Font
 var body_font: Font
 var pieces: Array[Dictionary] = []
@@ -183,15 +171,7 @@ func _rect(i: int) -> Rect2:
 	return Rect2(_intro_position(i) if intro_active else Vector2(piece["pos"]), Vector2(piece["width"], 39))
 
 func _plain(word: String) -> String:
-	var cleaned := word.to_lower().strip_edges()
-	while not cleaned.is_empty() and not (cleaned.unicode_at(0) >= 97 and cleaned.unicode_at(0) <= 122):
-		cleaned = cleaned.substr(1)
-	while not cleaned.is_empty():
-		var c := cleaned.unicode_at(cleaned.length() - 1)
-		if (c >= 97 and c <= 122) or c == 232:
-			break
-		cleaned = cleaned.substr(0, cleaned.length() - 1)
-	return cleaned
+	return PoemData.normalize_word(word)
 
 func _syllables(word: String) -> int:
 	return PoemData.syllable_count(word)
@@ -226,21 +206,11 @@ func _pair_relationships(model: Dictionary, left_id: int, right_id: int) -> Arra
 
 # One formal vocabulary serves the intact poem and new compositions.
 # Rhyme is a provisional sound-family lexicon, not a full phonetic engine.
-const RHYME_FAMILIES := {
-	"come":"COME_TOMB", "tomb":"COME_TOMB", "deserts":"DESERTS_PARTS", "parts":"DESERTS_PARTS",
-	"eyes":"EYES", "lies":"EYES", "graces":"ACES", "faces":"ACES",
-	"age":"AGE", "rage":"AGE", "tongue":"TONGUE_SONG", "song":"TONGUE_SONG",
-	"time":"IME", "rhyme":"IME"
-}
 func _rhyme_family(word: String) -> String:
 	return PoemData.sound_family(word)
 
 func _echo_key(word: String) -> String:
-	var plain := PoemData.normalize_word(word).trim_prefix("\u0027")
-	for group in ECHO_GROUPS:
-		if plain in group:
-			return str(group[0])
-	return plain
+	return PoemData.echo_key(word)
 
 func _on_stage_line(i: int) -> int:
 	var center_y := _rect(i).get_center().y
