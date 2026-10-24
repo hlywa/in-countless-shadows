@@ -154,6 +154,22 @@ static func metrical_evidence(words: Array[String]) -> Dictionary:
 		"syllables":pattern.length(),"candidate":pattern.length() == 10,
 		"stress_verified":false, "template_fit":uncertain == 0 and deviations == 0 and pattern.length() == 10}
 
+# Interpretive hypotheses are invitations to read, never completion gates.
+static func reading_hypotheses(words: Array[String]) -> Array[String]:
+	var normalized: Array[String] = []
+	for word in words:
+		normalized.append(normalize_word(word))
+	var readings: Array[String] = []
+	if "life" in normalized and "tomb" in normalized:
+		readings.append("Preservation or burial? The verse may do both.")
+	if "truth" in normalized and "lies" in normalized:
+		readings.append("Testimony and invention compete for authority.")
+	if "child" in normalized and "rhyme" in normalized:
+		readings.append("What survives: a descendant, a poem, or both?")
+	if "time" in normalized and "age" in normalized:
+		readings.append("Time can preserve and erode at once.")
+	return readings
+
 static func turn_evidence(previous_words: Array[String], current_words: Array[String], line_index: int) -> Dictionary:
 	if current_words.is_empty():
 		return {"possible":false,"reason":""}
