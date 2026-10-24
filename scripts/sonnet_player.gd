@@ -12,10 +12,10 @@ const OXBLOOD := Color("#a4484d")
 const STAGE := Rect2(105, 105, 775, 585)
 const PILE := Rect2(902, 105, 273, 585)
 const SNAP := 30.0
-const INTRO_HOLD := 2.5
-const INTRO_FLY := 7.0
+const INTRO_HOLD := 1.35
+const INTRO_FLY := 4.2
 const VOLTA_LINE := 12 # Zero-based: "But were some child..." is line 13.
-const TRAY_ROWS := 9
+const TRAY_ROWS := 7
 const TRAY_COLS := 2
 const TRAY_PAGE_SIZE := TRAY_ROWS * TRAY_COLS
 # First Folio-style spelling is not enforced; this is a complete modernized Sonnet 17.
@@ -140,7 +140,7 @@ func _scatter() -> void:
 		var col := slot % TRAY_COLS
 		var row_index := int(slot / TRAY_COLS)
 		var tx := PILE.position.x + 12.0 + float(col) * 130.0
-		var ty := PILE.position.y + 49.0 + float(row_index) * 56.0
+		var ty := PILE.position.y + 45.0 + float(row_index) * 54.0
 		pieces[id]["tray_pos"] = Vector2(tx, ty)
 		pieces[id]["tray_page"] = int(order / TRAY_PAGE_SIZE)
 		pieces[id]["width"] = maxf(29.0, gothic.get_string_size(str(pieces[id]["word"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
@@ -150,7 +150,7 @@ func _visible_piece(i: int) -> bool:
 		if intro_elapsed <= INTRO_HOLD:
 			return true
 		var fraction := clampf((intro_elapsed - INTRO_HOLD) / INTRO_FLY, 0.0, 1.0)
-		var delay := float(i % 31) / 52.0
+		var delay := float(i % 31) / 70.0
 		var t := clampf((fraction - delay) / (1.0 - delay), 0.0, 1.0)
 		return int(pieces[i]["tray_page"]) == 0 or t < 0.83
 	if i == dragging or bool(pieces[i]["raised"]):
@@ -163,7 +163,7 @@ func _intro_position(i: int) -> Vector2:
 	if intro_elapsed <= INTRO_HOLD:
 		return original
 	var fraction := clampf((intro_elapsed - INTRO_HOLD) / INTRO_FLY, 0.0, 1.0)
-	var delay := float(i % 31) / 52.0
+	var delay := float(i % 31) / 70.0
 	var t := clampf((fraction - delay) / (1.0 - delay), 0.0, 1.0)
 	t = t * t * (3.0 - 2.0 * t)
 	var lift := sin(t * PI) * (12.0 + float(i % 9) * 5.0)
@@ -387,11 +387,15 @@ func _evaluate_form(intact: bool) -> Dictionary:
 	return _analyze_composition(intact)
 
 func _draw_form_report(model: Dictionary) -> void:
-	_write("FORM IN PROGRESS",Vector2(909,598),13,INK)
-	_write("LINES   %d / 14" % int(model["filled"]),Vector2(909,618),13,TEAL)
-	_write("10 SYLL %d / 14" % int(model["ten"]),Vector2(909,637),13,TEAL)
-	_write("RHYME   %d / 7" % int(model["rhymes"]),Vector2(1045,618),13,COPPER)
-	_write("KNOWN   %d / 7" % int(model["known"]),Vector2(1045,637),13,COPPER)
+	# The tray's final two rows are reserved for a compact, non-overlapping report.
+	var left := 909.0
+	var right := 1050.0
+	_write("FORM IN PROGRESS",Vector2(left,564),13,INK)
+	draw_line(Vector2(left,574),Vector2(1167,574),Color(INK,0.13),1.0)
+	_write("LINES  %d / 14" % int(model["filled"]),Vector2(left,595),13,TEAL)
+	_write("RHYME  %d / 7" % int(model["rhymes"]),Vector2(right,595),13,COPPER)
+	_write("10 SYLL  %d / 14" % int(model["ten"]),Vector2(left,617),13,TEAL)
+	_write("KNOWN  %d / 7" % int(model["known"]),Vector2(right,617),13,COPPER)
 	if bool(model["formal"]):
 		_write("FORM HOLDS. MEANING REMAINS OPEN.",Vector2(110,703),15,OXBLOOD)
 	elif bool(model["complete"]):
@@ -449,7 +453,7 @@ func _page() -> void:
 		_write("Lift a word from the ink at right.",Vector2(300,385),22,Color(INK,0.28))
 	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
 	if not intro_active:
-		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(908,684), 17, INK)
+		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(909,676), 16, INK)
 	else:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
@@ -554,7 +558,7 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var p := _local_point(event.position)
 		if event.pressed:
-			if Rect2(900,658,275,48).has_point(p):
+			if Rect2(900,646,275,52).has_point(p):
 				tray_page = (tray_page + 1) % int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))
 				queue_redraw()
 				accept_event()
