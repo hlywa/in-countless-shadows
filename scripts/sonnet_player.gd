@@ -477,7 +477,7 @@ func _page() -> void:
 	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
 	if not intro_active:
 		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(909,676), 16, INK)
-	else:
+	elif intro_elapsed < INTRO_HOLD:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
 	if not intro_active:
