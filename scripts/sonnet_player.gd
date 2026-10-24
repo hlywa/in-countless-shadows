@@ -70,6 +70,7 @@ var intro_active := true
 var intro_flight_started := false
 var tray_page := 0
 var tray_indices: Array[int] = []
+var constraint_report: Dictionary = {}
 
 func _process(delta: float) -> void:
 	if intro_active:
@@ -300,11 +301,7 @@ func _draw_formal_overlay(intact: bool) -> void:
 	if intact:
 		_draw_volta_mark(VOLTA_LINE, true)
 	else:
-		# Mark the inherited location only when the player places "But" there.
-		for id in _line_words(VOLTA_LINE,false):
-			if _plain(str(pieces[id]["word"])) == "but":
-				_draw_volta_mark(VOLTA_LINE, false)
-				break
+		# Proposed turns are drawn by the composition evaluator, wherever they occur.
 
 func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	var cy := 142.0 + float(line_number) * 39.0
@@ -312,6 +309,65 @@ func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	draw_arc(Vector2(x,cy),14.0,-PI*0.62,PI*0.64,22,Color(OXBLOOD,0.8),2.0,true)
 	draw_line(Vector2(x+10,cy+10),Vector2(x+16,cy+16),Color(OXBLOOD,0.8),2.0,true)
 	_write("TURN?" if not intact else "VOLTA",Vector2(133,cy-18),11,OXBLOOD)
+
+
+# Composition-based constraints: never compare a solution against Shakespeare's word order.
+# The lexicon is intentionally limited; unknown rhyme is not treated as a failure.
+func _evaluate_form(intact: bool) -> Dictionary:
+	var line_data: Array[Dictionary] = []
+	var used := 0
+	var ten_count := 0
+	var filled := 0
+	for line_number in range(14):
+		var ids := _line_words(line_number, intact)
+		var syllables := 0
+		for id in ids:
+			syllables += int(pieces[id]["syllables"])
+		used += ids.size()
+		if not ids.is_empty():
+			filled += 1
+		if syllables == 10:
+			ten_count += 1
+		line_data.append({"ids":ids,"syllables":syllables,"family":_rhyme_family(_line_ending(line_number,intact))})
+	var pairs := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
+	var rhymes := 0
+	var known := 0
+	for pair in pairs:
+		var a: int = pair[0]
+		var b: int = pair[1]
+		var fa: String = line_data[a]["family"]
+		var fb: String = line_data[b]["family"]
+		if not fa.is_empty() and not fb.is_empty():
+			known += 1
+			if fa == fb:
+				rhymes += 1
+	var turns: Array[int] = []
+	for line_number in range(14):
+		var ids: Array = line_data[line_number]["ids"]
+		if ids.is_empty():
+			continue
+		var first := _plain(str(pieces[int(ids[0])]["word"])).trim_prefix("'")
+		if first in ["but","yet","though","so","then"]:
+			turns.append(line_number)
+	var complete := used == pieces.size() and filled == 14
+	return {"lines":filled,"ten":ten_count,"rhymes":rhymes,"known":known,"turns":turns,
+		"complete":complete,"formal":complete and ten_count == 14 and rhymes == 7,"used":used}
+
+func _draw_form_report() -> void:
+	var report := _evaluate_form(false)
+	_write("FORM IN PROGRESS",Vector2(909,598),13,INK)
+	_write("LINES   %d / 14" % int(report["lines"]),Vector2(909,618),13,TEAL)
+	_write("10 SYLL %d / 14" % int(report["ten"]),Vector2(909,637),13,TEAL)
+	_write("RHYME   %d / 7" % int(report["rhymes"]),Vector2(1045,618),13,COPPER)
+	_write("KNOWN   %d / 7" % int(report["known"]),Vector2(1045,637),13,COPPER)
+	if bool(report["formal"]):
+		_write("FORM HOLDS. MEANING REMAINS OPEN.",Vector2(110,703),15,OXBLOOD)
+	elif bool(report["complete"]):
+		_write("All words placed. The form can still change.",Vector2(110,703),15,OXBLOOD)
+	elif int(report["used"]) > 0:
+		_write("%d words placed; more than one reading is possible." % int(report["used"]),Vector2(110,703),13,Color(INK,0.55))
+	for line_number in report["turns"]:
+		_draw_volta_mark(int(line_number),false)
 
 func _assembled_syllables_before(piece_id: int) -> int:
 	var count := 0
@@ -372,6 +428,8 @@ func _page() -> void:
 		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
 		_write("⌣  SHARED VERSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
+	if not intro_active:
+		_draw_form_report()
 	# The intact poem and the recomposed poem use the same annotation engine.
 	_draw_formal_overlay(intro_active and intro_elapsed <= INTRO_HOLD)
 	# Relationships appear between physically adjacent words on the page.
@@ -394,7 +452,7 @@ func _page() -> void:
 		_draw_piece(dragging)
 	if discoveries.size() > 0:
 		var last: String = discoveries[discoveries.size()-1]
-		_write(last,Vector2(110,702),17,OXBLOOD)
+		_write(last,Vector2(110,678),13,OXBLOOD)
 func _has_raised() -> bool:
 	for p in pieces:
 		if bool(p["raised"]):
