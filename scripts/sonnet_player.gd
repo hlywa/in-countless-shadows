@@ -188,18 +188,29 @@ func _syllables(word: String) -> int:
 
 # Analyze neighboring pieces using their provenance and the syllabic sequence
 # assembled on the page. Stress is presented as an iambic hypothesis, not a fact.
-func _relation_ids(left_id: int, right_id: int) -> Dictionary:
-	var line_a := _on_stage_line(left_id)
-	var line_b := _on_stage_line(right_id)
-	if line_a < 0 or line_a != line_b:
-		return {}
-	var wa := _plain(str(pieces[left_id]["word"]))
-	var wb := _plain(str(pieces[right_id]["word"]))
+func _relation_ids(left_id: int, right_id: int) -> Array[Dictionary]:
+	return _pair_relationships(_analyze_composition(false),left_id,right_id)
+
+func _pair_relationships(model: Dictionary, left_id: int, right_id: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var adjacent := false
+	for line in model["lines"]:
+		var ids: Array = line["ids"]
+		var index := ids.find(left_id)
+		if index >= 0 and index + 1 < ids.size() and int(ids[index+1]) == right_id:
+			adjacent = true
+			break
+	if not adjacent:
+		return result
+	var a := _plain(str(pieces[left_id]["word"]))
+	var b := _plain(str(pieces[right_id]["word"]))
 	for pair in TENSIONS:
-		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":OXBLOOD,"label":"INTERPRETIVE TENSION?","symbol":"◇"}
-	var count := _assembled_syllables_before(left_id) + int(pieces[left_id]["syllables"])
-	return {"color":TEAL,"label":"METRICAL POSITION?","symbol":"˘ /" if count % 2 == 0 else "˘"}
+		if (a == pair[0] and b == pair[1]) or (a == pair[1] and b == pair[0]):
+			result.append({"color":OXBLOOD,"label":"INTERPRETIVE TENSION?","symbol":"◇"})
+	var pulse: int = int(model["starts"].get(left_id,0)) + int(pieces[left_id]["syllables"])
+	result.append({"color":TEAL,"label":"METRICAL POSITION?","symbol":"˘ /" if pulse % 2 == 0 else "˘"})
+	result.append({"color":VIOLET,"label":"SHARED VERSE","symbol":"⌣"})
+	return result
 
 # One formal vocabulary serves the intact poem and new compositions.
 # Rhyme is a provisional sound-family lexicon, not a full phonetic engine.
@@ -245,56 +256,38 @@ func _line_ending(line_number: int, intact: bool) -> String:
 		return ""
 	return str(pieces[words[words.size() - 1]]["word"])
 
-func _draw_formal_overlay(intact: bool) -> void:
-	# Editorial marks are suggestions. They do not score interpretation.
-	var pairs := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
-	for pair in pairs:
-		var a: int = pair[0]
-		var b: int = pair[1]
-		var aw := _line_ending(a,intact)
-		var bw := _line_ending(b,intact)
-		if aw.is_empty() or bw.is_empty():
+func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
+	for pair in model["pairs"]:
+		if not intact and not bool(pair["match"]):
 			continue
-		var family_a := _rhyme_family(aw)
-		var family_b := _rhyme_family(bw)
-		var matched := not family_a.is_empty() and family_a == family_b
-		# A dotted editorial question on the intact text also acknowledges slant rhyme.
-		if intact or matched:
-			var x := 866.0
-			var ya := 145.0 + float(a) * 39.0
-			var yb := 145.0 + float(b) * 39.0
-			draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(COPPER,0.7),1.4)
-			draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(COPPER,0.43),1.1)
-			draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(COPPER,0.7),1.4)
-			_write("≈" if matched else "≈?",Vector2(x+11,(ya+yb)*0.5+5),12,COPPER)
-	for line_number in range(14):
-		var syllables := _line_syllables(line_number,intact)
-		if syllables == 0:
-			continue
-		var ids := _line_words(line_number,intact)
-		for id in ids:
-			var word_rect := _rect(id)
-			var before := 0
-			for other in ids:
-				if other == id:
-					break
-				before += int(pieces[other]["syllables"])
-			var n := int(pieces[id]["syllables"])
+		var a: int = pair["a"]
+		var b: int = pair["b"]
+		var x := 866.0
+		var ya := 145.0 + float(a)*39.0
+		var yb := 145.0 + float(b)*39.0
+		draw_line(Vector2(x,ya),Vector2(x+9,ya),Color(COPPER,0.7),1.4)
+		draw_line(Vector2(x+9,ya),Vector2(x+9,yb),Color(COPPER,0.43),1.1)
+		draw_line(Vector2(x+9,yb),Vector2(x,yb),Color(COPPER,0.7),1.4)
+		_write("≈" if bool(pair["match"]) else "≈?",Vector2(x+11,(ya+yb)*0.5+5),12,COPPER)
+	for n in range(14):
+		var line: Dictionary = model["lines"][n]
+		for id in line["ids"]:
+			var rect := _rect(int(id))
+			var before: int = int(model["starts"].get(int(id),0))
+			var count := int(pieces[int(id)]["syllables"])
 			var marks := ""
-			for k in range(n):
-				marks += ("˘" if (before+k)%2 == 0 else "/")
-				if k < n-1:
+			for k in range(count):
+				marks += "˘" if (before+k)%2 == 0 else "/"
+				if k < count-1:
 					marks += " "
-			_write(marks,word_rect.position + Vector2(4,38 if intact else 49),11,Color(TEAL,0.83))
-		if syllables == 10:
-			draw_circle(Vector2(118,144.0+float(line_number)*39.0),2.4,TEAL)
-	# The source volta is at line 13: "But were some child..."
-	# A marginal proofreader's hook, not a correctness check.
+			_write(marks,rect.position+Vector2(4,38 if intact else 49),11,Color(TEAL,0.83))
+		if int(line["syllables"]) == 10:
+			draw_circle(Vector2(118,144.0+float(n)*39.0),2.4,TEAL)
 	if intact:
-		_draw_volta_mark(VOLTA_LINE, true)
+		_draw_volta_mark(VOLTA_LINE,true)
 	else:
-		# Proposed turns are drawn by the composition evaluator, wherever they occur.
-		pass
+		for n in model["turns"]:
+			_draw_volta_mark(int(n),false)
 
 func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	var cy := 142.0 + float(line_number) * 39.0
@@ -304,63 +297,64 @@ func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	_write("TURN?" if not intact else "VOLTA",Vector2(133,cy-18),11,OXBLOOD)
 
 
-# Composition-based constraints: never compare a solution against Shakespeare's word order.
-# The lexicon is intentionally limited; unknown rhyme is not treated as a failure.
-func _evaluate_form(intact: bool) -> Dictionary:
-	var line_data: Array[Dictionary] = []
+# Single model for all annotations, feedback and formal completion.
+func _analyze_composition(intact: bool) -> Dictionary:
+	var lines: Array[Dictionary] = []
+	var starts: Dictionary = {}
 	var used := 0
-	var ten_count := 0
+	var ten := 0
 	var filled := 0
-	for line_number in range(14):
-		var ids := _line_words(line_number, intact)
-		var syllables := 0
+	var turns: Array[int] = []
+	for n in range(14):
+		var ids := _line_words(n,intact)
+		var count := 0
 		for id in ids:
-			syllables += int(pieces[id]["syllables"])
+			starts[id] = count
+			count += int(pieces[id]["syllables"])
 		used += ids.size()
 		if not ids.is_empty():
 			filled += 1
-		if syllables == 10:
-			ten_count += 1
-		line_data.append({"ids":ids,"syllables":syllables,"family":_rhyme_family(_line_ending(line_number,intact))})
-	var pairs := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
-	var rhymes := 0
+			var first := _plain(str(pieces[ids[0]]["word"])).trim_prefix("'")
+			if first in ["but","yet","though","so","then"]:
+				turns.append(n)
+		if count == 10:
+			ten += 1
+		lines.append({"ids":ids,"syllables":count,"family":_rhyme_family(_line_ending(n,intact))})
+	var pairs: Array[Dictionary] = []
+	var matched := 0
 	var known := 0
-	for pair in pairs:
-		var a: int = pair[0]
-		var b: int = pair[1]
-		var fa: String = line_data[a]["family"]
-		var fb: String = line_data[b]["family"]
-		if not fa.is_empty() and not fb.is_empty():
+	for positions in [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]:
+		var a: int = positions[0]
+		var b: int = positions[1]
+		var fa: String = lines[a]["family"]
+		var fb: String = lines[b]["family"]
+		var is_known := not fa.is_empty() and not fb.is_empty()
+		var is_match := is_known and fa == fb
+		if is_known:
 			known += 1
-			if fa == fb:
-				rhymes += 1
-	var turns: Array[int] = []
-	for line_number in range(14):
-		var ids: Array = line_data[line_number]["ids"]
-		if ids.is_empty():
-			continue
-		var first := _plain(str(pieces[int(ids[0])]["word"])).trim_prefix("'")
-		if first in ["but","yet","though","so","then"]:
-			turns.append(line_number)
+		if is_match:
+			matched += 1
+		pairs.append({"a":a,"b":b,"known":is_known,"match":is_match})
 	var complete := used == pieces.size() and filled == 14
-	return {"lines":filled,"ten":ten_count,"rhymes":rhymes,"known":known,"turns":turns,
-		"complete":complete,"formal":complete and ten_count == 14 and rhymes == 7,"used":used}
+	return {"lines":lines,"starts":starts,"filled":filled,"ten":ten,"rhymes":matched,
+		"known":known,"turns":turns,"pairs":pairs,"used":used,"complete":complete,
+		"formal":complete and ten == 14 and matched == 7}
 
-func _draw_form_report() -> void:
-	var report := _evaluate_form(false)
+func _evaluate_form(intact: bool) -> Dictionary:
+	return _analyze_composition(intact)
+
+func _draw_form_report(model: Dictionary) -> void:
 	_write("FORM IN PROGRESS",Vector2(909,598),13,INK)
-	_write("LINES   %d / 14" % int(report["lines"]),Vector2(909,618),13,TEAL)
-	_write("10 SYLL %d / 14" % int(report["ten"]),Vector2(909,637),13,TEAL)
-	_write("RHYME   %d / 7" % int(report["rhymes"]),Vector2(1045,618),13,COPPER)
-	_write("KNOWN   %d / 7" % int(report["known"]),Vector2(1045,637),13,COPPER)
-	if bool(report["formal"]):
+	_write("LINES   %d / 14" % int(model["filled"]),Vector2(909,618),13,TEAL)
+	_write("10 SYLL %d / 14" % int(model["ten"]),Vector2(909,637),13,TEAL)
+	_write("RHYME   %d / 7" % int(model["rhymes"]),Vector2(1045,618),13,COPPER)
+	_write("KNOWN   %d / 7" % int(model["known"]),Vector2(1045,637),13,COPPER)
+	if bool(model["formal"]):
 		_write("FORM HOLDS. MEANING REMAINS OPEN.",Vector2(110,703),15,OXBLOOD)
-	elif bool(report["complete"]):
+	elif bool(model["complete"]):
 		_write("All words placed. The form can still change.",Vector2(110,703),15,OXBLOOD)
-	elif int(report["used"]) > 0:
-		_write("%d words placed; more than one reading is possible." % int(report["used"]),Vector2(110,703),13,Color(INK,0.55))
-	for line_number in report["turns"]:
-		_draw_volta_mark(int(line_number),false)
+	elif int(model["used"]) > 0:
+		_write("%d words placed; more than one reading is possible." % int(model["used"]),Vector2(110,703),13,Color(INK,0.55))
 
 func _assembled_syllables_before(piece_id: int) -> int:
 	var count := 0
@@ -421,10 +415,11 @@ func _page() -> void:
 		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
 		_write("⌣  SHARED VERSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
+	var intact := intro_active and intro_elapsed <= INTRO_HOLD
+	var model := _analyze_composition(intact)
 	if not intro_active:
-		_draw_form_report()
-	# The intact poem and the recomposed poem use the same annotation engine.
-	_draw_formal_overlay(intro_active and intro_elapsed <= INTRO_HOLD)
+		_draw_form_report(model)
+	_draw_formal_overlay(model,intact)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
 		if intro_active or not bool(pieces[i]["raised"]) or i == dragging:
@@ -432,12 +427,13 @@ func _page() -> void:
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]) or j == dragging or not _neighbor(i,j):
 				continue
-			var r: Dictionary = _relation_ids(i,j)
-			var color: Color = r.get("color",INK)
+			var relations := _pair_relationships(model,i,j)
+			var color: Color = relations[0]["color"] if not relations.is_empty() else INK
 			var edge := _rect(i).end
 			_ink_join(Vector2(edge.x+3.0,edge.y-18.0),color,1.0)
-			if not r.is_empty():
-				_write(str(r.get("symbol","")) + "  " + str(r["label"]),Vector2(edge.x-8.0,edge.y-47.0),13,color)
+			for k in range(relations.size()):
+				var relation: Dictionary = relations[k]
+				_write(str(relation["symbol"]),Vector2(edge.x-8.0+float(k)*18.0,edge.y-47.0),12,relation["color"])
 	for i in range(pieces.size()):
 		if i != dragging and _visible_piece(i):
 			_draw_piece(i)
@@ -478,8 +474,8 @@ func _draw_piece(i: int) -> void:
 			var target := _rect(j)
 			var distance := (r.position - Vector2(target.end.x+9,target.position.y)).length()
 			if distance < 46.0:
-				var rel: Dictionary = _relation_ids(j,i)
-				var ink_color: Color = rel.get("color",INK)
+				var rel := _relation_ids(j,i)
+				var ink_color: Color = rel[0]["color"] if not rel.is_empty() else INK
 				_ink_outline(target,ink_color)
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
@@ -548,12 +544,17 @@ func _gui_input(event: InputEvent) -> void:
 			if closest >= 0:
 				var anchor := _rect(closest)
 				pieces[id]["pos"] = Vector2(anchor.end.x+8.0,anchor.position.y)
-				var relation: Dictionary = _relation_ids(closest,id)
-				if not relation.is_empty():
-					discoveries.append(str(relation["label"]) + "  ·  " + str(pieces[closest]["word"]) + " / " + str(pieces[id]["word"]))
+				pass # Relationship feedback is evaluated after placement.
 				else:
 					discoveries.append("Words joined. Try another arrangement.")
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
+			if closest >= 0 and bool(pieces[id]["raised"]):
+				var relations := _relation_ids(closest,id)
+				if not relations.is_empty():
+					var labels: Array[String] = []
+					for relation in relations:
+						labels.append(str(relation["label"]))
+					discoveries.append(" + ".join(labels))
 			if bool(pieces[id]["raised"]):
 				var line_number := _on_stage_line(id)
 				if line_number >= 0 and _line_syllables(line_number, false) == 10:
