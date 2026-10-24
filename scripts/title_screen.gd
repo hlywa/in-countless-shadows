@@ -1,6 +1,6 @@
 extends Control
 ## The title assembles as movable type; the sonnet subsequently disassembles.
-const ARRIVAL_DURATION := 3.8
+const ARRIVAL_DURATION := 2.4
 const PAPER := Color("#f4efe3")
 const INK := Color("#181410")
 var title_label: Label
@@ -39,12 +39,12 @@ func _build_fragments() -> void:
 		var width := title_font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var target := Vector2(x, baseline)
 		var origin := Vector2(-width - 70.0, -70.0) if i == 0 else (Vector2(size.x + 90.0, baseline - 170.0) if i == 1 else Vector2(size.x + 100.0, size.y + 100.0))
-		fragments.append({"word":word, "target":target, "origin":origin, "delay":float(i) * 0.32})
+		fragments.append({"word":word, "target":target, "origin":origin, "delay":float(i) * 0.18})
 		x += width + space
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	var fraction := clampf((elapsed - 2.9) / 0.9, 0.0, 1.0)
+	var fraction := clampf((elapsed - 1.75) / 0.65, 0.0, 1.0)
 	begin_label.modulate.a = fraction
 	settings_label.modulate.a = fraction
 	if elapsed < ARRIVAL_DURATION:
