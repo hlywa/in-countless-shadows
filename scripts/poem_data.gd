@@ -33,12 +33,12 @@ static func rhyme_partner(line_index: int) -> int:
 # original line endings, these families apply wherever a word is placed.
 # The historical / slant pairings are hypotheses, not exact-rhyme proofs.
 const SOUND_FAMILIES := {
-	"come":"UM", "tomb":"UM", "some":"UM",
-	"deserts":"ERTS", "parts":"ERTS",
-	"eyes":"EYES", "lies":"EYES",
+	"come":"COME", "tomb":"TOMB", "some":"COME",
+	"deserts":"DESERTS", "parts":"PARTS",
+	"eyes":"EYE", "lies":"EYE",
 	"graces":"ACES", "faces":"ACES",
 	"age":"AGE", "rage":"AGE",
-	"tongue":"UNG", "song":"UNG",
+	"tongue":"TONGUE", "song":"SONG",
 	"time":"IME", "rhyme":"IME",
 	"life":"IFE", "wife":"IFE",
 	"will":"ILL", "fill'd":"ILL",
@@ -49,9 +49,10 @@ const SOUND_FAMILIES := {
 	"verse":"ERSE", "worse":"ERSE",
 	"men":"EN", "then":"EN"
 }
-const HISTORICAL_OR_SLANT := ["UM","ERTS","UNG"]
+const HISTORICAL_OR_SLANT := []
+const EDITORIAL_RHYME_PAIRS := [["come","tomb"],["deserts","parts"],["tongue","song"]]
 const SYLLABLE_OVERRIDES := {
-	"believe":2, "deserts":2, "heaven":2, "beauty":2, "numbers":2,
+	"believe":2, "deserts":2, "heaven":2, "poet's":2, "beauty":2, "numbers":2,
 	"number":2, "graces":2, "poet":2, "heavenly":3, "earthly":2,
 	"faces":2, "papers":2, "yellow'd":2, "scorn'd":1, "stretchèd":2,
 	"meter":2, "antique":2, "alive":2, "twice":1, "would":1,
@@ -75,7 +76,13 @@ static func _is_letter(code: int) -> bool:
 	return (code >= 97 and code <= 122) or code == 232
 
 static func syllable_count(word: String) -> int:
-	return int(SYLLABLE_OVERRIDES.get(normalize_word(word),1))
+	var key := normalize_word(word)
+	if SYLLABLE_OVERRIDES.has(key):
+		return int(SYLLABLE_OVERRIDES[key])
+	var stress := str(STRESS_PATTERNS.get(key,"?"))
+	if stress != "?":
+		return stress.length()
+	return 1
 
 static func sound_family(word: String) -> String:
 	return str(SOUND_FAMILIES.get(normalize_word(word),""))
@@ -83,11 +90,14 @@ static func sound_family(word: String) -> String:
 static func rhyme_evidence(a: String,b: String) -> String:
 	var family_a := sound_family(a)
 	var family_b := sound_family(b)
-	if family_a.is_empty() or family_a != family_b:
-		return "unknown"
-	if family_a in HISTORICAL_OR_SLANT:
-		return "possible"
-	return "supported"
+	if not family_a.is_empty() and family_a == family_b:
+		return "supported"
+	var aa := normalize_word(a)
+	var bb := normalize_word(b)
+	for pair in EDITORIAL_RHYME_PAIRS:
+		if (aa == pair[0] and bb == pair[1]) or (aa == pair[1] and bb == pair[0]):
+			return "possible"
+	return "unknown"
 
 static func echo_key(word: String) -> String:
 	var normalized := normalize_word(word)
@@ -99,23 +109,23 @@ static func echo_key(word: String) -> String:
 # Stress templates are pronunciation hypotheses, not definitive scansion.
 # A question mark means the lexicon cannot responsibly assign stress.
 const STRESS_PATTERNS := {
-	"who":"1","will":"0","believe":"01","my":"0","verse":"1","in":"0",
-	"time":"1","to":"0","come":"1","if":"0","it":"0","were":"0",
-	"with":"0","your":"0","most":"1","high":"1","deserts":"01",
-	"though":"1","yet":"1","heaven":"10","knows":"1","is":"0",
-	"but":"1","as":"0","a":"0","tomb":"1","which":"0","hides":"1",
-	"life":"1","and":"0","shows":"1","not":"1","half":"1",
-	"parts":"1","i":"0","could":"1","write":"1","the":"0",
-	"beauty":"10","of":"0","eyes":"1","fresh":"1","numbers":"10",
-	"number":"10","all":"1","graces":"10","age":"1","would":"0",
-	"say":"1","this":"0","poet":"10","lies":"1","such":"1",
+	"who":"?","will":"?","believe":"01","my":"?","verse":"1","in":"?",
+	"time":"1","to":"?","come":"1","if":"?","it":"?","were":"?",
+	"with":"?","your":"?","most":"1","high":"1","deserts":"01",
+	"though":"?","yet":"?","heaven":"10","knows":"1","is":"?",
+	"but":"?","as":"?","a":"?","tomb":"1","which":"0","hides":"1",
+	"life":"1","and":"?","shows":"1","not":"1","half":"1",
+	"parts":"1","i":"?","could":"1","write":"1","the":"?",
+	"beauty":"10","of":"?","eyes":"1","fresh":"1","numbers":"10",
+	"number":"10","all":"1","graces":"10","age":"1","would":"?",
+	"say":"1","this":"?","poet":"10","poet's":"10","lies":"1","such":"1",
 	"heavenly":"100","touches":"10","earthly":"10","faces":"10",
-	"so":"1","should":"0","papers":"10","yellow'd":"10",
-	"be":"0","scorn'd":"1","like":"1","old":"1","men":"1",
-	"less":"1","truth":"1","than":"0","tongue":"1","true":"1",
+	"so":"?","should":"?","papers":"10","yellow'd":"10",
+	"be":"?","scorn'd":"1","like":"1","old":"1","men":"1",
+	"less":"1","truth":"1","than":"?","tongue":"1","true":"1",
 	"rights":"1","term'd":"1","rage":"1","stretchèd":"10",
-	"meter":"10","an":"0","antique":"01","song":"1","some":"1",
-	"child":"1","yours":"1","alive":"01","that":"0","you":"0",
+	"meter":"10","an":"?","antique":"01","song":"1","some":"1",
+	"child":"1","yours":"1","alive":"01","that":"?","you":"?",
 	"live":"1","twice":"1","rhyme":"1","ne'er":"1","touch'd":"1",
 	"fill'd":"1"
 }
@@ -129,7 +139,7 @@ static func metrical_evidence(words: Array[String]) -> Dictionary:
 	var uncertain := 0
 	for word in words:
 		var stress := stress_pattern(word)
-		if stress == "?":
+		if stress == "?" or stress.find("?") >= 0:
 			uncertain += 1
 			for i in range(syllable_count(word)):
 				pattern += "?"
@@ -142,7 +152,7 @@ static func metrical_evidence(words: Array[String]) -> Dictionary:
 			deviations += 1
 	return {"pattern":pattern,"unknown_words":uncertain,"deviations":deviations,
 		"syllables":pattern.length(),"candidate":pattern.length() == 10,
-		"stress_verified":uncertain == 0 and deviations == 0 and pattern.length() == 10}
+		"stress_verified":false, "template_fit":uncertain == 0 and deviations == 0 and pattern.length() == 10}
 
 static func turn_evidence(previous_words: Array[String], current_words: Array[String], line_index: int) -> Dictionary:
 	if current_words.is_empty():
