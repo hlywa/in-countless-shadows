@@ -616,14 +616,14 @@ func _page() -> void:
 	if discoveries.size() > 0 and not reading_view:
 		var last: String = discoveries[discoveries.size()-1]
 		_write(last,Vector2(110,678),13,OXBLOOD)
-func _drop_target(p: Vector2) -> Dictionary:
+func _drop_target(p: Vector2, id: int) -> Dictionary:
 	var line_number := roundi((p.y - 142.5) / 39.0)
 	var target_y := 142.5 + float(line_number) * 39.0
 	if not STAGE.has_point(p) or line_number < 0 or line_number >= 14 or absf(p.y-target_y) > 19.0:
 		return {"valid":false,"reason":"Drop onto one of the fourteen verse lines."}
-	var index := _insertion_index(dragging,line_number,p.x)
+	var index := _insertion_index(id,line_number,p.x)
 	var candidate: Array = composition.lines[line_number].duplicate()
-	candidate.insert(index,dragging)
+	candidate.insert(index,id)
 	if not _line_width_fits(candidate):
 		return {"valid":false,"reason":"This line is full; try another line."}
 	var x := 129.0
@@ -632,7 +632,7 @@ func _drop_target(p: Vector2) -> Dictionary:
 	return {"valid":true,"line":line_number,"index":index,"x":x}
 
 func _draw_drop_preview() -> void:
-	var target := _drop_target(mouse_at)
+	var target := _drop_target(mouse_at,dragging)
 	if bool(target["valid"]):
 		var x: float = target["x"]
 		var y := 123.0 + float(target["line"])*39.0
@@ -787,7 +787,7 @@ func _gui_input(event: InputEvent) -> void:
 			var id := dragging
 			var drop := _local_point(event.position)
 			dragging = -1
-			var target := _drop_target(drop)
+			var target := _drop_target(drop,id)
 			var valid: bool = target["valid"]
 			if valid:
 				valid = _insert_piece(id,int(target["line"]),drop.x)
