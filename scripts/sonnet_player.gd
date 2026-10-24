@@ -373,10 +373,17 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		pairs.append({"a":a,"b":b,"known":is_known,"match":is_match,"evidence":evidence})
 		if evidence == "unknown" and (not str(lines[a]["ending"]).is_empty() or not str(lines[b]["ending"]).is_empty()):
 			rhyme_obligations.append({"a":a,"b":b,"left":str(lines[a]["ending"]),"right":str(lines[b]["ending"])})
+	# Completion is a composition-state fact, not a verdict on poetic quality.
+	# The formal candidate remains provisional when rhymes or stress are uncertain.
 	var complete := used == pieces.size() and filled == 14
+	var tentative_rhymes := 0
+	for pair in pairs:
+		if str(pair["evidence"]) == "possible":
+			tentative_rhymes += 1
 	return {"lines":lines,"starts":starts,"filled":filled,"ten":ten,"rhymes":matched,
 		"known":known,"turns":turns,"pairs":pairs,"echoes":echoes,"used":used,
 		"rhyme_obligations":rhyme_obligations,"meter_candidates":metrical_candidates,"stress_verified":verified_stress,
+		"tentative_rhymes":tentative_rhymes,
 		"complete":complete,"formal":complete and ten == 14 and matched == 7}
 
 func _evaluate_form(intact: bool) -> Dictionary:
@@ -391,9 +398,9 @@ func _draw_form_report(model: Dictionary) -> void:
 	_write("LINES  %d / 14" % int(model["filled"]),Vector2(left,595),13,TEAL)
 	_write("RHYME  %d / 7" % int(model["rhymes"]),Vector2(right,595),13,COPPER)
 	_write("10 SYLL  %d / 14" % int(model["ten"]),Vector2(left,617),13,TEAL)
-	_write("OPEN  %d / 7" % int(model["rhyme_obligations"].size()),Vector2(right,617),13,COPPER)
+	_write("OPEN %d · ? %d" % [int(model["rhyme_obligations"].size()),int(model["tentative_rhymes"])],Vector2(right,617),13,COPPER)
 	if bool(model["formal"]):
-		_write("FORMAL CANDIDATE · STRESS AND MEANING OPEN.",Vector2(110,703),15,OXBLOOD)
+		_write("FORMAL CANDIDATE · %d RHYMES TENTATIVE · STRESS OPEN." % int(model["tentative_rhymes"]),Vector2(110,703),15,OXBLOOD)
 	elif bool(model["complete"]):
 		_write("All words placed. The form can still change.",Vector2(110,703),15,OXBLOOD)
 	elif int(model["used"]) > 0:
