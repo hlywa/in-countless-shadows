@@ -1,58 +1,59 @@
 extends Control
-## The existing Gothic font is revealed like ink absorbing into paper.
-const REVEAL_DURATION := 2.1
-const INK := Color("#181410")
+## The original UnifrakturCook Label stays intact; an ink mask reveals its glyphs.
+const REVEAL_DURATION := 2.3
 var title_label: Label
 var begin_label: Label
 var settings_label: Label
-var title_font: Font
 var elapsed := 0.0
+var ink_material: ShaderMaterial
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	title_label = get_node("Title") as Label
 	begin_label = get_node("StartButton") as Label
 	settings_label = get_node("SettingsButton") as Label
-	title_font = title_label.get_theme_font("font")
-	title_label.visible = false
+	# Render the font ONCE. Earlier overlapping draw_string passes caused
+	# doubled gray shadows and incorrect letter spacing.
+	title_label.visible = true
+	var ink_shader := Shader.new()
+	ink_shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+uniform float progress : hint_range(0.0, 1.0) = 0.0;
+float hash21(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+void fragment() {
+	vec4 glyph = texture(TEXTURE, UV) * COLOR;
+	// The front advances across the line with fine irregularities like
+	// ink catching in the paper. This is a glyph reveal, not handwriting
+	// stroke-order reconstruction.
+	float grain = hash21(floor(UV * vec2(720.0, 130.0))) - 0.5;
+	float flow = UV.x * 0.93 + UV.y * 0.07 + grain * 0.045;
+	float reveal = 1.0 - smoothstep(progress - 0.045, progress + 0.035, flow);
+	COLOR = vec4(glyph.rgb, glyph.a * reveal);
+}
+"""
+	ink_material = ShaderMaterial.new()
+	ink_material.shader = ink_shader
+	title_label.material = ink_material
+	ink_material.set_shader_parameter("progress",0.0)
 	begin_label.modulate.a = 0.0
 	settings_label.modulate.a = 0.0
 	begin_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	begin_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	begin_label.gui_input.connect(_on_begin_input)
-	queue_redraw()
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	var buttons := smoothstep(1.35, 2.1, elapsed)
+	var t := clampf(elapsed / REVEAL_DURATION,0.0,1.0)
+	# The ink first touches the left edge, then advances to the right.
+	ink_material.set_shader_parameter("progress",t * 1.12)
+	var buttons := smoothstep(1.55,2.3,elapsed)
 	begin_label.modulate.a = buttons
 	settings_label.modulate.a = buttons
-	if elapsed <= REVEAL_DURATION:
-		queue_redraw()
-
-func _draw() -> void:
-	if title_font == null:
-		return
-	var font_size := title_label.get_theme_font_size("font_size")
-	var title := title_label.text
-	var width := title_font.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
-	var baseline := title_label.position + Vector2(maxf(0.0,(title_label.size.x-width)*0.5),float(font_size)*0.95)
-	# Fixed letterforms, never flying fragments. Three passes create a soft
-	# absorption effect while retaining the exact glyph shapes of the font.
-	var t := smoothstep(0.0, REVEAL_DURATION, elapsed)
-	var haze := Color(INK,0.12 * (1.0-t))
-	draw_string(title_font,baseline+Vector2(0.7,0.6),title,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,haze)
-	draw_string(title_font,baseline,title,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,Color(INK,0.12+0.88*t))
-	# A narrow irregular reveal front moves through the already-positioned type.
-	# Draw each glyph in place with its own slight absorption delay.
-	var x := baseline.x
-	for i in range(title.length()):
-		var glyph := title.substr(i,1)
-		var advance := title_font.get_string_size(glyph,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
-		var offset := float(i) / maxf(1.0,float(title.length()-1))
-		var local_t := smoothstep(offset*0.72,offset*0.72+0.55,elapsed/REVEAL_DURATION)
-		draw_string(title_font,Vector2(x,baseline.y),glyph,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,Color(INK,local_t*0.35))
-		x += advance
+	if elapsed >= REVEAL_DURATION:
+		set_process(false)
 
 func _on_begin_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
