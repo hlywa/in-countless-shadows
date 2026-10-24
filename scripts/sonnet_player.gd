@@ -61,6 +61,65 @@ var intro_flight_started := false
 var tray_page := 0
 var tray_indices: Array[int] = []
 var constraint_report: Dictionary = {}
+var undo_stack: Array[Dictionary] = []
+var redo_stack: Array[Dictionary] = []
+var drag_snapshot: Dictionary = {}
+
+# Composition history stores only editable state, not animation or audio.
+func _snapshot() -> Dictionary:
+	var state: Array[Dictionary] = []
+	for piece in pieces:
+		state.append({"pos":piece["pos"],"raised":piece["raised"]})
+	return {"pieces":state,"page":tray_page}
+
+func _restore(state: Dictionary) -> void:
+	if state.is_empty() or state["pieces"].size() != pieces.size():
+		return
+	for i in range(pieces.size()):
+		pieces[i]["pos"] = state["pieces"][i]["pos"]
+		pieces[i]["raised"] = state["pieces"][i]["raised"]
+	tray_page = int(state["page"])
+	dragging = -1
+	queue_redraw()
+
+func _undo() -> void:
+	if undo_stack.is_empty():
+		return
+	redo_stack.append(_snapshot())
+	_restore(undo_stack.pop_back())
+
+func _redo() -> void:
+	if redo_stack.is_empty():
+		return
+	undo_stack.append(_snapshot())
+	_restore(redo_stack.pop_back())
+
+func _line_width_fits(ids: Array[int]) -> bool:
+	var total := 129.0
+	for id in ids:
+		total += float(pieces[id]["width"]) + 4.0
+	return total <= 870.0
+
+func _insert_piece(id: int, line_number: int, drop_x: float) -> bool:
+	if line_number < 0 or line_number >= 14:
+		return false
+	var ids := _line_words(line_number,false)
+	var insert_at := ids.size()
+	for k in range(ids.size()):
+		var rect := _rect(ids[k])
+		if drop_x < rect.get_center().x:
+			insert_at = k
+			break
+	ids.insert(insert_at,id)
+	if not _line_width_fits(ids):
+		return false
+	pieces[id]["raised"] = true
+	var x := 129.0
+	var y := 123.0 + float(line_number) * 39.0
+	for word_id in ids:
+		pieces[word_id]["pos"] = Vector2(x,y)
+		x += float(pieces[word_id]["width"]) + 4.0
+	return true
 
 func _process(delta: float) -> void:
 	if intro_active:
@@ -522,6 +581,18 @@ func _draw_piece(i: int) -> void:
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
 func _gui_input(event: InputEvent) -> void:
+	if not intro_active and event is InputEventKey and event.pressed and not event.echo:
+		if event.is_command_or_control_pressed() and event.keycode == KEY_Z:
+			if event.shift_pressed:
+				_redo()
+			else:
+				_undo()
+			accept_event()
+			return
+		if event.is_command_or_control_pressed() and event.keycode == KEY_Y:
+			_redo()
+			accept_event()
+			return
 	if intro_active:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			intro_elapsed = maxf(intro_elapsed, INTRO_HOLD)
@@ -561,6 +632,7 @@ func _gui_input(event: InputEvent) -> void:
 			for i in range(pieces.size()-1,-1,-1):
 				if _visible_piece(i) and _rect(i).grow(4).has_point(p):
 					var old_line := _on_stage_line(i) if bool(pieces[i]["raised"]) else -1
+					drag_snapshot = _snapshot()
 					dragging = i
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
@@ -575,39 +647,19 @@ func _gui_input(event: InputEvent) -> void:
 					return
 		elif dragging >= 0:
 			var id := dragging
+			var drop := _local_point(event.position)
 			dragging = -1
-			var pos: Vector2 = pieces[id]["pos"]
-			var closest := -1
-			var best := SNAP * 2.0
-			for j in range(pieces.size()):
-				if j == id or not bool(pieces[j]["raised"]):
-					continue
-				var r := _rect(j)
-				var target := Vector2(r.end.x + 8.0,r.position.y)
-				var d := pos.distance_to(target)
-				if d < best:
-					best = d
-					closest = j
-			if closest >= 0:
-				var anchor := _rect(closest)
-				var snapped := Vector2(anchor.end.x+8.0,anchor.position.y)
-				# Snap only when the anchor belongs to a valid verse.
-				if STAGE.has_point(snapped) and _on_stage_line(closest) >= 0:
-					pieces[id]["pos"] = snapped
-				# Relationship feedback is evaluated after placement.
-			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"]))
-			if closest >= 0 and bool(pieces[id]["raised"]):
-				var relations := _relation_ids(closest,id)
-				if not relations.is_empty():
-					var labels: Array[String] = []
-					for relation in relations:
-						labels.append(str(relation["label"]))
-					discoveries.append(" + ".join(labels))
-			if bool(pieces[id]["raised"]):
-				_reflow_line(_on_stage_line(id))
-				var line_number := _on_stage_line(id)
-				if line_number >= 0 and _line_syllables(line_number, false) == 10:
-					discoveries.append("TEN SYLLABLES · stress not checked")
+			var line_number := roundi((drop.y - 142.5) / 39.0)
+			var target_y := 142.5 + float(line_number) * 39.0
+			var valid := STAGE.has_point(drop) and absf(drop.y-target_y) <= 19.0
+			if valid:
+				valid = _insert_piece(id,line_number,drop.x)
+			if not valid:
+				_restore(drag_snapshot)
+				discoveries.append("That placement does not fit the verse.")
+			else:
+				undo_stack.append(drag_snapshot)
+				redo_stack.clear()
 				var report := _evaluate_form(false)
 				if int(report["rhymes"]) > 0:
 					discoveries.append("RHYME PAIRS · %d / 7" % int(report["rhymes"]))
@@ -615,11 +667,9 @@ func _gui_input(event: InputEvent) -> void:
 					var obligation: Dictionary = report["rhyme_obligations"][0]
 					discoveries.append("RHYME OPEN · lines %d and %d" % [int(obligation["a"])+1,int(obligation["b"])+1])
 			_paper_sound(0.09)
-			if not bool(pieces[id]["raised"]):
-				pieces[id]["pos"] = pieces[id]["tray_pos"]
-				discoveries.append("Return to the ink. Lift another word.")
 			queue_redraw()
 			accept_event()
+
 # Irregular pools and small hanging droplets, drawn in the same canvas as the type.
 func _ink_outline(r: Rect2, ink_color: Color) -> void:
 	var edge := r.grow(3.0)
