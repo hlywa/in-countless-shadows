@@ -587,9 +587,7 @@ func _gui_input(event: InputEvent) -> void:
 			if closest >= 0:
 				var anchor := _rect(closest)
 				pieces[id]["pos"] = Vector2(anchor.end.x+8.0,anchor.position.y)
-				pass # Relationship feedback is evaluated after placement.
-				else:
-					discoveries.append("Words joined. Try another arrangement.")
+				# Relationship feedback is evaluated after placement.
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
 			if closest >= 0 and bool(pieces[id]["raised"]):
 				var relations := _relation_ids(closest,id)
