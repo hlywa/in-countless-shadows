@@ -189,25 +189,17 @@ func _syllables(word: String) -> int:
 # Analyze neighboring pieces using their provenance and the syllabic sequence
 # assembled on the page. Stress is presented as an iambic hypothesis, not a fact.
 func _relation_ids(left_id: int, right_id: int) -> Dictionary:
-	var left: Dictionary = pieces[left_id]
-	var right: Dictionary = pieces[right_id]
-	var wa := _plain(str(left["word"]))
-	var wb := _plain(str(right["word"]))
-	if int(left["line"]) == int(right["line"]) and int(right["word_index"]) == int(left["word_index"]) + 1:
-		var start_syllable := _assembled_syllables_before(left_id)
-		var end_syllable := start_syllable + int(left["syllables"])
-		if end_syllable % 2 == 0:
-			return {"color":TEAL,"label":"IAMBIC FOOT?","symbol":"˘ /"}
-		return {"color":TEAL,"label":"METRICAL PULSE?","symbol":"˘"}
-	if str(left["rhyme"]) == str(right["rhyme"]) and int(left["line"]) != int(right["line"]):
-		if int(left["word_index"]) == original_lines[int(left["line"])].size() - 1 and int(right["word_index"]) == original_lines[int(right["line"])].size() - 1:
-			return {"color":COPPER,"label":"RHYME POSITION","symbol":"≈"}
+	var line_a := _on_stage_line(left_id)
+	var line_b := _on_stage_line(right_id)
+	if line_a < 0 or line_a != line_b:
+		return {}
+	var wa := _plain(str(pieces[left_id]["word"]))
+	var wb := _plain(str(pieces[right_id]["word"]))
 	for pair in TENSIONS:
 		if (wa == pair[0] and wb == pair[1]) or (wa == pair[1] and wb == pair[0]):
-			return {"color":OXBLOOD,"label":"INTERPRETIVE TENSION","symbol":"◇"}
-	if int(left["line"]) == int(right["line"]):
-		return {"color":VIOLET,"label":"SHARED LINE","symbol":"⌣"}
-	return {}
+			return {"color":OXBLOOD,"label":"INTERPRETIVE TENSION?","symbol":"◇"}
+	var count := _assembled_syllables_before(left_id) + int(pieces[left_id]["syllables"])
+	return {"color":TEAL,"label":"METRICAL POSITION?","symbol":"˘ /" if count % 2 == 0 else "˘"}
 
 # One formal vocabulary serves the intact poem and new compositions.
 # Rhyme is a provisional sound-family lexicon, not a full phonetic engine.
@@ -302,6 +294,7 @@ func _draw_formal_overlay(intact: bool) -> void:
 		_draw_volta_mark(VOLTA_LINE, true)
 	else:
 		# Proposed turns are drawn by the composition evaluator, wherever they occur.
+		pass
 
 func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	var cy := 142.0 + float(line_number) * 39.0
@@ -562,9 +555,12 @@ func _gui_input(event: InputEvent) -> void:
 					discoveries.append("Words joined. Try another arrangement.")
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
 			if bool(pieces[id]["raised"]):
-				var count := _assembled_syllables_before(id) + int(pieces[id]["syllables"])
-				if count == 10:
-					discoveries.append("TEN SYLLABLES · a pentameter-length sequence (stress remains open)")
+				var line_number := _on_stage_line(id)
+				if line_number >= 0 and _line_syllables(line_number, false) == 10:
+					discoveries.append("TEN SYLLABLES · possible pentameter")
+				var report := _evaluate_form(false)
+				if int(report["rhymes"]) > 0:
+					discoveries.append("RHYME PAIRS · %d / 7" % int(report["rhymes"]))
 			_paper_sound(0.09)
 			if not bool(pieces[id]["raised"]):
 				pieces[id]["pos"] = pieces[id]["tray_pos"]
