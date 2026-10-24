@@ -36,6 +36,7 @@ const SONNET_LINES := [
 	"But were some child of yours alive that time,",
 	"You should live twice; in it, and in my rhyme."
 ]
+const RHYME_PAIRS := [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]
 const RHYME_SCHEME := ["A","B","A","B","C","D","C","D","E","F","E","F","G","G"]
 const SYLLABLES := {
 	"believe":2, "deserts":2, "heaven":2, "beauty":2, "numbers":2,
@@ -45,6 +46,7 @@ const SYLLABLES := {
 	"touches":2, "less":1, "term'd":1, "rage":1, "should":1
 }
 # These pairings are interpretive suggestions, deliberately distinct from prosodic rules.
+const ECHO_GROUPS := [["number","numbers"],["poet","poet\u0027s"],["touches","touch\u0027d"],["age","age"],["time","time"]]
 const TENSIONS := [
 	["truth","lies"], ["beauty","eyes"], ["child","rhyme"],
 	["verse","truth"], ["poet","lies"], ["life","tomb"]
@@ -207,6 +209,8 @@ func _pair_relationships(model: Dictionary, left_id: int, right_id: int) -> Arra
 	for pair in TENSIONS:
 		if (a == pair[0] and b == pair[1]) or (a == pair[1] and b == pair[0]):
 			result.append({"color":OXBLOOD,"label":"INTERPRETIVE TENSION?","symbol":"◇"})
+	if _echo_key(a) == _echo_key(b):
+		result.append({"color":VIOLET,"label":"WORD ECHO","symbol":"↺"})
 	var pulse: int = int(model["starts"].get(left_id,0)) + int(pieces[left_id]["syllables"])
 	result.append({"color":TEAL,"label":"METRICAL POSITION?","symbol":"˘ /" if pulse % 2 == 0 else "˘"})
 	result.append({"color":VIOLET,"label":"SHARED VERSE","symbol":"⌣"})
@@ -215,13 +219,20 @@ func _pair_relationships(model: Dictionary, left_id: int, right_id: int) -> Arra
 # One formal vocabulary serves the intact poem and new compositions.
 # Rhyme is a provisional sound-family lexicon, not a full phonetic engine.
 const RHYME_FAMILIES := {
-	"come":"UM", "tomb":"UM", "deserts":"ERTS", "parts":"ARTS",
+	"come":"COME_TOMB", "tomb":"COME_TOMB", "deserts":"DESERTS_PARTS", "parts":"DESERTS_PARTS",
 	"eyes":"EYES", "lies":"EYES", "graces":"ACES", "faces":"ACES",
-	"age":"AGE", "rage":"AGE", "tongue":"UNG", "song":"ONG",
+	"age":"AGE", "rage":"AGE", "tongue":"TONGUE_SONG", "song":"TONGUE_SONG",
 	"time":"IME", "rhyme":"IME"
 }
 func _rhyme_family(word: String) -> String:
 	return str(RHYME_FAMILIES.get(_plain(word), ""))
+
+func _echo_key(word: String) -> String:
+	var plain := _plain(word).trim_prefix("\u0027")
+	for group in ECHO_GROUPS:
+		if plain in group:
+			return str(group[0])
+	return plain
 
 func _on_stage_line(i: int) -> int:
 	var center_y := _rect(i).get_center().y
@@ -271,6 +282,13 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 		_write("≈" if bool(pair["match"]) else "≈?",Vector2(x+11,(ya+yb)*0.5+5),12,COPPER)
 	for n in range(14):
 		var line: Dictionary = model["lines"][n]
+		if bool(line["has_words"]):
+			var mark := "∎" if bool(line["end_stopped"]) else "↳"
+			_write(mark,Vector2(847,145.0+float(n)*39.0),12,VIOLET)
+		for pause_index in line["internal_pauses"]:
+			var pause_id: int = line["ids"][int(pause_index)]
+			var pause_rect := _rect(pause_id)
+			_write("‖",pause_rect.position+Vector2(pause_rect.size.x-5,8),12,VIOLET)
 		for id in line["ids"]:
 			var rect := _rect(int(id))
 			var before: int = int(model["starts"].get(int(id),0))
@@ -283,6 +301,12 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 			_write(marks,rect.position+Vector2(4,38 if intact else 49),11,Color(TEAL,0.83))
 		if int(line["syllables"]) == 10:
 			draw_circle(Vector2(118,144.0+float(n)*39.0),2.4,TEAL)
+	for key in model["echoes"]:
+		var occurrences: Array = model["echoes"][key]
+		if occurrences.size() > 1:
+			for id in occurrences:
+				var rect := _rect(int(id))
+				draw_line(Vector2(rect.position.x+3,rect.end.y-2),Vector2(rect.end.x-3,rect.end.y-2),Color(VIOLET,0.65),1.5)
 	if intact:
 		_draw_volta_mark(VOLTA_LINE,true)
 	else:
@@ -298,6 +322,8 @@ func _draw_volta_mark(line_number: int, intact: bool) -> void:
 
 
 # Single model for all annotations, feedback and formal completion.
+# All visible relationships are derived from the current composition.
+# Punctuation and turn markers are editorial clues, not automatic proof of meaning.
 func _analyze_composition(intact: bool) -> Dictionary:
 	var lines: Array[Dictionary] = []
 	var starts: Dictionary = {}
@@ -305,25 +331,42 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	var ten := 0
 	var filled := 0
 	var turns: Array[int] = []
+	var echoes: Dictionary = {}
 	for n in range(14):
 		var ids := _line_words(n,intact)
 		var count := 0
+		var words: Array[String] = []
 		for id in ids:
 			starts[id] = count
 			count += int(pieces[id]["syllables"])
+			var word := str(pieces[id]["word"])
+			words.append(word)
+			var key := _echo_key(word)
+			if not echoes.has(key):
+				echoes[key] = []
+			echoes[key].append(id)
 		used += ids.size()
 		if not ids.is_empty():
 			filled += 1
-			var first := _plain(str(pieces[ids[0]]["word"])).trim_prefix("'")
-			if first in ["but","yet","though","so","then"]:
+			var first := _plain(words[0]).trim_prefix("'")
+			if first in ["but","yet","though","so","then"] and n > 0:
 				turns.append(n)
 		if count == 10:
 			ten += 1
-		lines.append({"ids":ids,"syllables":count,"family":_rhyme_family(_line_ending(n,intact))})
+		var ending := words[words.size()-1] if not words.is_empty() else ""
+		var end_stopped := ending.ends_with(".") or ending.ends_with("?") or ending.ends_with("!") or ending.ends_with(";") or ending.ends_with(":")
+		var internal_pauses: Array[int] = []
+		for k in range(maxi(0,words.size()-1)):
+			var w: String = words[k]
+			if w.ends_with(",") or w.ends_with(";") or w.ends_with(":") or w.ends_with("?") or w.ends_with("!"):
+				internal_pauses.append(k)
+		lines.append({"ids":ids,"syllables":count,"family":_rhyme_family(ending),
+			"ending":ending,"end_stopped":end_stopped,"internal_pauses":internal_pauses,
+			"has_words":not ids.is_empty(),"group":0 if n < 4 else (1 if n < 8 else (2 if n < 12 else 3))})
 	var pairs: Array[Dictionary] = []
 	var matched := 0
 	var known := 0
-	for positions in [[0,2],[1,3],[4,6],[5,7],[8,10],[9,11],[12,13]]:
+	for positions in RHYME_PAIRS:
 		var a: int = positions[0]
 		var b: int = positions[1]
 		var fa: String = lines[a]["family"]
@@ -337,8 +380,8 @@ func _analyze_composition(intact: bool) -> Dictionary:
 		pairs.append({"a":a,"b":b,"known":is_known,"match":is_match})
 	var complete := used == pieces.size() and filled == 14
 	return {"lines":lines,"starts":starts,"filled":filled,"ten":ten,"rhymes":matched,
-		"known":known,"turns":turns,"pairs":pairs,"used":used,"complete":complete,
-		"formal":complete and ten == 14 and matched == 7}
+		"known":known,"turns":turns,"pairs":pairs,"echoes":echoes,"used":used,
+		"complete":complete,"formal":complete and ten == 14 and matched == 7}
 
 func _evaluate_form(intact: bool) -> Dictionary:
 	return _analyze_composition(intact)
@@ -413,7 +456,7 @@ func _page() -> void:
 	if not intro_active:
 		_write("˘ /  METER", Vector2(128,112), 12, TEAL)
 		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
-		_write("⌣  SHARED VERSE", Vector2(368,112), 12, VIOLET)
+		_write("↺  ECHO / PAUSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
 	var intact := intro_active and intro_elapsed <= INTRO_HOLD
 	var model := _analyze_composition(intact)
