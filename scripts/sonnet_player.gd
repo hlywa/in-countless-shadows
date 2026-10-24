@@ -588,9 +588,14 @@ func _gui_input(event: InputEvent) -> void:
 				return
 			for i in range(pieces.size()-1,-1,-1):
 				if _visible_piece(i) and _rect(i).grow(4).has_point(p):
+					var old_line := _on_stage_line(i) if bool(pieces[i]["raised"]) else -1
 					dragging = i
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
+					# Reflow the source line when a word is lifted away.
+					if old_line >= 0:
+						pieces[i]["raised"] = false
+						_reflow_line(old_line)
 					show_help = false
 					_paper_sound(0.07)
 					accept_event()
@@ -613,7 +618,10 @@ func _gui_input(event: InputEvent) -> void:
 					closest = j
 			if closest >= 0:
 				var anchor := _rect(closest)
-				pieces[id]["pos"] = Vector2(anchor.end.x+8.0,anchor.position.y)
+				var snapped := Vector2(anchor.end.x+8.0,anchor.position.y)
+				# Snap only when the anchor belongs to a valid verse.
+				if STAGE.has_point(snapped) and _on_stage_line(closest) >= 0:
+					pieces[id]["pos"] = snapped
 				# Relationship feedback is evaluated after placement.
 			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"]))
 			if closest >= 0 and bool(pieces[id]["raised"]):
