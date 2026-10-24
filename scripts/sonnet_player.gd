@@ -183,7 +183,15 @@ func _rect(i: int) -> Rect2:
 	return Rect2(_intro_position(i) if intro_active else Vector2(piece["pos"]), Vector2(piece["width"], 39))
 
 func _plain(word: String) -> String:
-	return word.to_lower().trim_suffix(",").trim_suffix(".").trim_suffix(":").trim_suffix(";").trim_suffix("?").trim_suffix("!")
+	var cleaned := word.to_lower().strip_edges()
+	while not cleaned.is_empty() and not (cleaned.unicode_at(0) >= 97 and cleaned.unicode_at(0) <= 122):
+		cleaned = cleaned.substr(1)
+	while not cleaned.is_empty():
+		var c := cleaned.unicode_at(cleaned.length() - 1)
+		if (c >= 97 and c <= 122) or c == 232:
+			break
+		cleaned = cleaned.substr(0, cleaned.length() - 1)
+	return cleaned
 
 func _syllables(word: String) -> int:
 	return int(SYLLABLES.get(_plain(word), 1))
@@ -268,6 +276,8 @@ func _line_ending(line_number: int, intact: bool) -> String:
 	return str(pieces[words[words.size() - 1]]["word"])
 
 func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
+	if intro_active and not intact:
+		return
 	for pair in model["pairs"]:
 		if not intact and not bool(pair["match"]):
 			continue
@@ -298,7 +308,7 @@ func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
 				marks += "˘" if (before+k)%2 == 0 else "/"
 				if k < count-1:
 					marks += " "
-			_write(marks,rect.position+Vector2(4,38 if intact else 49),11,Color(TEAL,0.83))
+			_write(marks,rect.position+Vector2(4,36),11,Color(TEAL,0.83))
 		if int(line["syllables"]) == 10:
 			draw_circle(Vector2(118,144.0+float(n)*39.0),2.4,TEAL)
 	for key in model["echoes"]:
@@ -403,6 +413,19 @@ func _draw_form_report(model: Dictionary) -> void:
 	elif int(model["used"]) > 0:
 		_write("%d words placed; more than one reading is possible." % int(model["used"]),Vector2(110,703),13,Color(INK,0.55))
 
+# Keep assembled words as a readable sequence after every drop.
+# The left-to-right order is taken from the drop positions; subsequent words
+# are reflowed at their actual rendered width, not their original positions.
+func _reflow_line(line_number: int) -> void:
+	if line_number < 0 or line_number >= 14:
+		return
+	var ids := _line_words(line_number,false)
+	var x := 129.0
+	var y := 123.0 + float(line_number) * 39.0
+	for id in ids:
+		pieces[id]["pos"] = Vector2(x,y)
+		x += float(pieces[id]["width"]) + 4.0
+
 func _assembled_syllables_before(piece_id: int) -> int:
 	var count := 0
 	var target := _rect(piece_id)
@@ -463,7 +486,7 @@ func _page() -> void:
 		_write("↺  ECHO / PAUSE", Vector2(368,112), 12, VIOLET)
 		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
 	var intact := intro_active and intro_elapsed <= INTRO_HOLD
-	var model := _analyze_composition(intact)
+	var model := _analyze_composition(intact) if not intro_active or intact else {}
 	if not intro_active:
 		_draw_form_report(model)
 	_draw_formal_overlay(model,intact)
@@ -512,7 +535,7 @@ func _draw_piece(i: int) -> void:
 				draw_circle(Vector2(drip_x,drip_y),2.2,Color(INK,0.72))
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
-	_write(word,r.position+Vector2(4,23 if intro_active or not on_page else 29),20 if intro_active or not on_page else 27,INK,true)
+	_write(word,r.position+Vector2(4,23),20,INK,true)
 	# Scansion marks are drawn centrally by _draw_formal_overlay().
 	if i == dragging:
 		for j in range(pieces.size()):
@@ -592,7 +615,7 @@ func _gui_input(event: InputEvent) -> void:
 				var anchor := _rect(closest)
 				pieces[id]["pos"] = Vector2(anchor.end.x+8.0,anchor.position.y)
 				# Relationship feedback is evaluated after placement.
-			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"])) or closest >= 0
+			pieces[id]["raised"] = STAGE.has_point(Vector2(pieces[id]["pos"]))
 			if closest >= 0 and bool(pieces[id]["raised"]):
 				var relations := _relation_ids(closest,id)
 				if not relations.is_empty():
@@ -601,6 +624,7 @@ func _gui_input(event: InputEvent) -> void:
 						labels.append(str(relation["label"]))
 					discoveries.append(" + ".join(labels))
 			if bool(pieces[id]["raised"]):
+				_reflow_line(_on_stage_line(id))
 				var line_number := _on_stage_line(id)
 				if line_number >= 0 and _line_syllables(line_number, false) == 10:
 					discoveries.append("TEN SYLLABLES · possible pentameter")
