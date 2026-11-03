@@ -10,6 +10,7 @@ var display_font: Font
 var selected: Array = ["",""]
 var active_slot := 0
 var completed := false
+var discovered_once := false
 var choice_rects: Array[Rect2] = []
 var continue_rect := Rect2(900,580,260,58)
 var reset_rect := Rect2(900,510,260,45)
@@ -38,29 +39,31 @@ func _draw() -> void:
 		var stem := str(level["first_stem"]) if i == 0 else str(level["second_stem"])
 		_label(stem,rect.position+Vector2(15,37),21,INK,body_font,690)
 		_label(str(selected[i]) if not str(selected[i]).is_empty() else "[ choose an ending ]",rect.position+Vector2(20,67),20,TEAL if not str(selected[i]).is_empty() else COPPER)
-	_label("AVAILABLE ENDINGS",Vector2(90,530),17,INK)
+	_label("AVAILABLE ENDINGS",Vector2(90,519),17,INK)
 	choice_rects.clear()
 	for j in range(level["choices"].size()):
-		var rect := Rect2(90+j*190,555,175,53)
+		var rect := Rect2(90+(j%3)*255,540+int(j/3)*64,238,52)
 		choice_rects.append(rect)
 		draw_rect(rect,Color("#fffaf1"))
 		draw_rect(rect,Color(INK,0.28),false,1.0)
-		_label(str(level["choices"][j]),rect.position+Vector2(20,34),23)
+		_label(str(level["choices"][j]),rect.position+Vector2(20,34),23,TEAL if str(level["choices"][j]) in selected else INK)
 	draw_line(Vector2(884,280),Vector2(884,670),Color(INK,0.2))
 	_label("LISTEN FOR THE ECHO",Vector2(900,318),18)
+	var evaluation: Dictionary = PuzzleLevels.rhyme_evaluation(level,selected)
+	_label(str(evaluation["heading"]),Vector2(900,363),18,TEAL if completed else INK,body_font,260)
+	_label(str(evaluation["detail"]),Vector2(900,396),16,INK,body_font,260)
 	if completed:
-		_label("time / rhyme",Vector2(900,365),23,TEAL)
-		_label("These endings rhyme.",Vector2(900,401),18)
-		_label("The final sound fulfills",Vector2(900,430),17)
-		_label("an expectation.",Vector2(900,453),17)
-	else:
-		_label("The endings are still open.",Vector2(900,365),17)
-		_label("Try different combinations.",Vector2(900,397),17)
-		_label("Which pair connects?",Vector2(900,430),17)
+		if bool(evaluation.get("original",false)):
+			_label("Shakespeare's original pair.",Vector2(900,436),16,COPPER,body_font,260)
+		else:
+			_label("A new rhyme, not the original.",Vector2(900,436),16,COPPER,body_font,260)
+		_label("How has the meaning changed?",Vector2(900,462),16,INK,body_font,260)
+	elif discovered_once:
+		_label("Try another combination.",Vector2(900,442),16,COPPER,body_font,260)
 	draw_rect(reset_rect,Color("#fffaf1"))
 	draw_rect(reset_rect,Color(INK,0.28),false)
 	_label("Reset endings",reset_rect.position+Vector2(15,29),19)
-	if completed:
+	if discovered_once:
 		draw_rect(continue_rect,TEAL)
 		_label("Explore the whole sonnet",continue_rect.position+Vector2(10,35),19,PAPER,body_font,245)
 	_label("Sonnet 17 · Shakespeare",Vector2(90,683),16,Color(INK,0.6))
@@ -73,7 +76,7 @@ func _gui_input(event: InputEvent) -> void:
 		selected = ["",""]
 		active_slot = 0
 		completed = false
-	elif completed and continue_rect.has_point(point):
+	elif discovered_once and continue_rect.has_point(point):
 		get_tree().change_scene_to_file("res://scenes/sonnet_player.tscn")
 		accept_event()
 		return
@@ -91,6 +94,8 @@ func _gui_input(event: InputEvent) -> void:
 					selected[other] = ""
 				selected[active_slot] = word
 				completed = PuzzleLevels.rhyme_match(level,selected)
+				if completed:
+					discovered_once = true
 				if active_slot == 0:
 					active_slot = 1
 				break
