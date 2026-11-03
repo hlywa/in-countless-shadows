@@ -68,6 +68,9 @@ var composition: CompositionState
 var reading_view := false
 var placement_hint := ""
 var show_detail := false
+var feedback_message := ""
+var feedback_color := INK
+var feedback_age := 0.0
 const SAVE_PATH := "user://composition.json"
 
 # Composition history stores only editable state, not animation or audio.
@@ -140,17 +143,23 @@ func _insert_piece(id: int, line_number: int, drop_x: float) -> bool:
 	_layout_composition()
 	return true
 
+func _notify(message: String, color: Color = INK) -> void:
+	feedback_message = message
+	feedback_color = color
+	feedback_age = 5.0
+	queue_redraw()
+
 func _save_composition() -> void:
 	var file := FileAccess.open(SAVE_PATH,FileAccess.WRITE)
 	if file == null:
-		discoveries.append("Could not save the composition.")
+		_notify("Could not save the composition.",OXBLOOD)
 		return
 	file.store_string(JSON.stringify({"version":1,"lines":composition.capture()}))
-	discoveries.append("Composition saved.")
+	_notify("Composition saved.",TEAL)
 
 func _load_composition() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
-		discoveries.append("No saved composition yet.")
+		_notify("No saved composition yet.",OXBLOOD)
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	if not (parsed is Dictionary) or int(parsed.get("version",0)) != 1 or not (parsed.get("lines") is Array):
@@ -181,18 +190,23 @@ func _load_composition() -> void:
 	undo_stack.append(previous)
 	redo_stack.clear()
 	_layout_composition()
-	discoveries.append("Composition loaded.")
+	_notify("Composition loaded.",TEAL)
 
 func _export_text() -> void:
 	var file := FileAccess.open("user://sonnet17-recomposed.txt",FileAccess.WRITE)
 	if file == null:
-		discoveries.append("Could not export text.")
+		_notify("Could not export text.",OXBLOOD)
 		return
 	for line in composition.as_words(pieces):
 		file.store_line(" ".join(PackedStringArray(line)))
-	discoveries.append("Exported sonnet17-recomposed.txt to user data.")
+	_notify("Text exported to the game data folder.",TEAL)
 
 func _process(delta: float) -> void:
+	if feedback_age > 0.0:
+		feedback_age = maxf(0.0, feedback_age - delta)
+		if feedback_age == 0.0:
+			feedback_message = ""
+		queue_redraw()
 	if intro_active:
 		intro_elapsed += delta
 		if intro_elapsed >= INTRO_HOLD and intro_elapsed < INTRO_HOLD + INTRO_FLY:
@@ -580,7 +594,7 @@ func _page() -> void:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,678),Color(INK,0.13),1.0)
 	if not intro_active:
-		_write("Drag words into the lines. H: show or hide poetic marks.",Vector2(129,113),16,Color(INK,0.65))
+		_write("Arrange the words to explore how a sonnet works. H: poetic marks.",Vector2(129,113),15,Color(INK,0.65))
 	var intact := intro_active and intro_elapsed <= INTRO_HOLD
 	var model := _analyze_composition(intact) if not intro_active or intact else {}
 	if not intro_active:
@@ -610,19 +624,18 @@ func _page() -> void:
 		_draw_drop_preview()
 	if reading_view and not intro_active:
 		_draw_reading_view(model)
-	if discoveries.size() > 0 and not reading_view and dragging < 0:
-		var last: String = discoveries[discoveries.size()-1]
-		_write_fitted(last,Vector2(110,701),15,OXBLOOD,760.0)
+	if not reading_view and dragging < 0 and not feedback_message.is_empty():
+		_write_fitted(feedback_message,Vector2(110,701),15,feedback_color,760.0)
 func _drop_target(p: Vector2, id: int) -> Dictionary:
 	var line_number := roundi((p.y - 142.5) / 39.0)
 	var target_y := 142.5 + float(line_number) * 39.0
 	if not STAGE.has_point(p) or line_number < 0 or line_number >= 14 or absf(p.y-target_y) > 19.0:
-		return {"valid":false,"reason":"Drop onto one of the fourteen verse lines."}
+		return {"valid":false,"reason":"Move the word onto a line in the poem."}
 	var index := _insertion_index(id,line_number,p.x)
 	var candidate: Array = composition.lines[line_number].duplicate()
 	candidate.insert(index,id)
 	if not _line_width_fits(candidate):
-		return {"valid":false,"reason":"This line is full; try another line."}
+		return {"valid":false,"reason":"This line has no room. Try a shorter arrangement or another line."}
 	var x := 129.0
 	for i in range(index):
 		x += float(pieces[int(candidate[i])]["width"]) + 4.0
@@ -633,8 +646,9 @@ func _draw_drop_preview() -> void:
 	if bool(target["valid"]):
 		var x: float = target["x"]
 		var y := 123.0 + float(target["line"])*39.0
-		draw_line(Vector2(x,y-4),Vector2(x,y+30),TEAL,2.0)
-		_write("Line %d · position %d" % [int(target["line"])+1,int(target["index"])+1],Vector2(110,701),15,TEAL)
+		draw_rect(Rect2(129,y-2,733,36),Color(TEAL,0.055))
+		draw_line(Vector2(x,y-4),Vector2(x,y+30),TEAL,2.5)
+		_write("Place in line %d, position %d" % [int(target["line"])+1,int(target["index"])+1],Vector2(110,701),15,TEAL)
 	else:
 		_write_fitted(str(target["reason"]),Vector2(110,701),15,OXBLOOD,760.0)
 
@@ -796,19 +810,21 @@ func _gui_input(event: InputEvent) -> void:
 				valid = _insert_piece(id,int(target["line"]),drop.x)
 			if not valid:
 				_restore(drag_snapshot)
-				discoveries.append(str(target["reason"]) if not bool(target["valid"]) else "That placement does not fit the verse.")
+				_notify(str(target["reason"]) if not bool(target["valid"]) else "That word cannot fit on this line.",OXBLOOD)
 			else:
 				undo_stack.append(drag_snapshot)
 				redo_stack.clear()
 				var report := _evaluate_form(false)
-				if int(report["rhymes"]) > 0:
-					discoveries.append("RHYME PAIRS · %d / 7" % int(report["rhymes"]))
+				var message := "Word placed. Try another arrangement to see what changes."
 				if not report["rhyme_obligations"].is_empty():
 					var obligation: Dictionary = report["rhyme_obligations"][0]
 					var target_word := str(obligation["left"]) if not str(obligation["left"]).is_empty() else str(obligation["right"])
-					discoveries.append("LINES %d / %d · seek a rhyme for %s" % [int(obligation["a"])+1,int(obligation["b"])+1,target_word])
-				if not report["hypotheses"].is_empty():
-					discoveries.append(str(report["hypotheses"][0]))
+					message = "Lines %d and %d: find a rhyme for '%s'." % [int(obligation["a"])+1,int(obligation["b"])+1,target_word]
+				elif int(report["rhymes"]) > 0:
+					message = "%d rhyme pairs now connect." % int(report["rhymes"])
+				if bool(report["complete"]):
+					message = "All words placed. Press R to read your poem."
+				_notify(message,TEAL)
 			_paper_sound(0.09)
 			queue_redraw()
 			accept_event()
