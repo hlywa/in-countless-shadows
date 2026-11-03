@@ -15,11 +15,24 @@ const LEVELS := [
 		],
 		"initial_order":["answer","doubt","condition"],
 		"discovery":{"before":"doubt","turn":"condition","after":"answer"},
+		"next":"sonnet17_rhyme"
+	},
+	{
+		"id":"sonnet17_rhyme",
+		"title":"II. The Echo",
+		"subtitle":"An ending makes a promise.",
+		"instruction":"Choose the two line endings that answer each other in sound.",
+		"sonnet":17,
+		"mode":"rhyme_pair",
+		"first_stem":"But were some child of yours alive that",
+		"second_stem":"You should live twice; in it, and in my",
+		"choices":["time","rhyme","song","age"],
+		"solution":["time","rhyme"],
 		"next":"sonnet17_full"
 	},
 	{
 		"id":"sonnet17_full",
-		"title":"II. The Whole Sonnet",
+		"title":"III. The Whole Sonnet",
 		"subtitle":"Explore fourteen lines, rhyme, and rhythm.",
 		"instruction":"Recompose the poem, or create another from its words.",
 		"sonnet":17,
@@ -50,3 +63,22 @@ static func discovered_turn(level: Dictionary, order: Array) -> bool:
 		return false
 	var rule: Dictionary = level["discovery"]
 	return order.find(rule["before"]) < order.find(rule["turn"]) and order.find(rule["turn"]) < order.find(rule["after"])
+
+# A description of the rhetorical effect of a given ordering, not a quality score.
+static func turn_reading(level: Dictionary, order: Array) -> Dictionary:
+	if not valid_order(level,order):
+		return {"heading":"Incomplete arrangement","lines":["All three passages are needed."]}
+	if discovered_turn(level,order):
+		return {"heading":"A conditional answer","lines":["The poet's doubt comes first.","'But' introduces another possibility.","The final line offers a consequence."]}
+	var first: String = str(order[0])
+	if first == "answer":
+		return {"heading":"A promise before its premise","lines":["The promise of living twice comes first.","The explanation arrives only afterward.","How does that change its force?"]}
+	if first == "condition":
+		return {"heading":"A condition before the doubt","lines":["The possible child leads the passage.","The poet's doubt now interrupts it.","Which thought feels like a reply?"]}
+	return {"heading":"An unsettled turn","lines":["The doubt begins the passage.","The final thought changes its direction.","Try placing the condition between them."]}
+
+static func rhyme_match(level: Dictionary, selected: Array) -> bool:
+	if str(level.get("mode","")) != "rhyme_pair" or selected.size() != 2:
+		return false
+	var solution: Array = level.get("solution",[])
+	return selected[0] == solution[0] and selected[1] == solution[1]
