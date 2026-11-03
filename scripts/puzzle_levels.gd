@@ -28,11 +28,24 @@ const LEVELS := [
 		"second_stem":"You should live twice; in it, and in my",
 		"choices":["time","rhyme","eyes","lies","age","rage"],
 		"solution":["time","rhyme"],
+		"next":"sonnet17_measure"
+	},
+	{
+		"id":"sonnet17_measure",
+		"title":"III. The Measure",
+		"subtitle":"A line has a pulse.",
+		"instruction":"Choose a reading, then explore its ten syllable positions.",
+		"sonnet":17,
+		"mode":"meter_experiment",
+		"readings":[
+			{"id":"couplet","text":"You should live twice; in it, and in my rhyme.","words":["You","should","live","twice;","in","it,","and","in","my","rhyme."]},
+			{"id":"stretch","text":"And stretchèd meter of an antique song:","words":["And","stretchèd","meter","of","an","antique","song:"]}
+		],
 		"next":"sonnet17_full"
 	},
 	{
 		"id":"sonnet17_full",
-		"title":"III. The Whole Sonnet",
+		"title":"IV. The Whole Sonnet",
 		"subtitle":"Explore fourteen lines, rhyme, and rhythm.",
 		"instruction":"Recompose the poem, or create another from its words.",
 		"sonnet":17,
@@ -97,3 +110,19 @@ static func rhyme_evaluation(level: Dictionary, selected: Array) -> Dictionary:
 
 static func rhyme_match(level: Dictionary, selected: Array) -> bool:
 	return str(rhyme_evaluation(level,selected).get("status","")) == "supported"
+
+static func meter_reading(words: Array) -> Dictionary:
+	var total := 0
+	var unknown := 0
+	var slots: Array = []
+	for word in words:
+		var spelling := str(word)
+		var count := PoemData.syllable_count(spelling)
+		var key := PoemData.normalize_word(spelling)
+		var documented := PoemData.SYLLABLE_OVERRIDES.has(key) or PoemData.STRESS_PATTERNS.has(key)
+		if not documented:
+			unknown += 1
+		for i in range(count):
+			slots.append({"word":spelling,"position":total+i+1})
+		total += count
+	return {"syllables":total,"unknown_words":unknown,"slots":slots,"ten_positions":total == 10}
