@@ -375,6 +375,8 @@ func _line_ending(line_number: int, intact: bool) -> String:
 	return str(pieces[words[words.size() - 1]]["word"])
 
 func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
+	if model.is_empty():
+		return
 	if not intact and not show_detail:
 		return
 	if intro_active and not intact:
@@ -578,7 +580,7 @@ func _page() -> void:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
 	draw_line(Vector2(892,104),Vector2(892,678),Color(INK,0.13),1.0)
 	if not intro_active:
-		_write("Drag words into the lines. Press H for detailed poetic marks.",Vector2(129,113),16,Color(INK,0.65))
+		_write("Drag words into the lines. H: show or hide poetic marks.",Vector2(129,113),16,Color(INK,0.65))
 	var intact := intro_active and intro_elapsed <= INTRO_HOLD
 	var model := _analyze_composition(intact) if not intro_active or intact else {}
 	if not intro_active:
@@ -645,12 +647,12 @@ func _draw_reading_view(model: Dictionary) -> void:
 		var words: PackedStringArray = []
 		for id in ids:
 			words.append(str(pieces[int(id)]["word"]))
-		_write("%2d   %s" % [n+1," ".join(words)],Vector2(126,162+n*30),17,INK)
+		_write_fitted("%2d   %s" % [n+1," ".join(words)],Vector2(126,162+n*30),17,INK,990.0)
 	_write("FORM: %d / 14 TEN-SYLLABLE LINES  ·  %d / 7 RHYME PAIRS" % [int(model["ten"]),int(model["rhymes"])],Vector2(125,613),14,COPPER)
 	var interpretation := "No reading is prescribed. Consider what the arrangement makes possible."
 	if not model["hypotheses"].is_empty():
 		interpretation = str(model["hypotheses"][0])
-	_write(interpretation,Vector2(125,649),15,OXBLOOD)
+	_write_fitted(interpretation,Vector2(125,649),15,OXBLOOD,1000.0)
 	_write("S SAVE   E EXPORT   L LOAD   R CLOSE",Vector2(125,680),12,INK)
 
 func _has_raised() -> bool:
