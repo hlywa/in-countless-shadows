@@ -65,7 +65,7 @@ func _draw() -> void:
 	_label("Reset endings",reset_rect.position+Vector2(15,29),19)
 	if discovered_once:
 		draw_rect(continue_rect,TEAL)
-		_label("Explore the whole sonnet",continue_rect.position+Vector2(10,35),19,PAPER,body_font,245)
+		_label("Continue to rhythm",continue_rect.position+Vector2(10,35),19,PAPER,body_font,245)
 	_label("Sonnet 17 · Shakespeare",Vector2(90,683),16,Color(INK,0.6))
 
 func _gui_input(event: InputEvent) -> void:
@@ -77,7 +77,7 @@ func _gui_input(event: InputEvent) -> void:
 		active_slot = 0
 		completed = false
 	elif discovered_once and continue_rect.has_point(point):
-		get_tree().change_scene_to_file("res://scenes/sonnet_player.tscn")
+		get_tree().change_scene_to_file("res://scenes/meter_level.tscn")
 		accept_event()
 		return
 	elif Rect2(90,290,770,85).has_point(point):
