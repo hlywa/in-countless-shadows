@@ -9,8 +9,8 @@ const TEAL := Color("#477e7b")
 const COPPER := Color("#a16b49")
 const VIOLET := Color("#65558d")
 const OXBLOOD := Color("#a4484d")
-const STAGE := Rect2(105, 105, 775, 585)
-const PILE := Rect2(902, 105, 273, 585)
+const STAGE := Rect2(105, 125, 775, 555)
+const PILE := Rect2(902, 125, 273, 430)
 const SNAP := 30.0
 const INTRO_HOLD := 4.35
 const INTRO_FLY := 9.8
@@ -67,6 +67,7 @@ var drag_snapshot: Dictionary = {}
 var composition: CompositionState
 var reading_view := false
 var placement_hint := ""
+var show_detail := false
 const SAVE_PATH := "user://composition.json"
 
 # Composition history stores only editable state, not animation or audio.
@@ -234,7 +235,7 @@ func _scatter() -> void:
 		var y := 123.0 + float(line_number) * 39.0
 		for word_index in range(words.size()):
 			var word: String = words[word_index]
-			var width := maxf(29.0, gothic.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
+			var width := maxf(29.0, body_font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
 			var original_pos := Vector2(x, y)
 			pieces.append({"word":word, "pos":original_pos, "original_pos":original_pos,
 				"tray_pos":Vector2.ZERO, "width":width, "raised":false,
@@ -260,10 +261,10 @@ func _scatter() -> void:
 		var col := slot % TRAY_COLS
 		var row_index := int(slot / TRAY_COLS)
 		var tx := PILE.position.x + 12.0 + float(col) * 130.0
-		var ty := PILE.position.y + 45.0 + float(row_index) * 54.0
+		var ty := PILE.position.y + 28.0 + float(row_index) * 54.0
 		pieces[id]["tray_pos"] = Vector2(tx, ty)
 		pieces[id]["tray_page"] = int(order / TRAY_PAGE_SIZE)
-		pieces[id]["width"] = maxf(29.0, gothic.get_string_size(str(pieces[id]["word"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
+		pieces[id]["width"] = maxf(29.0, body_font.get_string_size(str(pieces[id]["word"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
 	composition = CompositionState.new(pieces.size())
 
 func _visible_piece(i: int) -> bool:
@@ -374,6 +375,8 @@ func _line_ending(line_number: int, intact: bool) -> String:
 	return str(pieces[words[words.size() - 1]]["word"])
 
 func _draw_formal_overlay(model: Dictionary, intact: bool) -> void:
+	if not intact and not show_detail:
+		return
 	if intro_active and not intact:
 		return
 	for pair in model["pairs"]:
@@ -429,7 +432,7 @@ func _draw_volta_mark(line_number: int, intact: bool) -> void:
 	var x := 112.0
 	draw_arc(Vector2(x,cy),14.0,-PI*0.62,PI*0.64,22,Color(OXBLOOD,0.8),2.0,true)
 	draw_line(Vector2(x+10,cy+10),Vector2(x+16,cy+16),Color(OXBLOOD,0.8),2.0,true)
-	_write("TURN?" if not intact else "VOLTA",Vector2(133,cy-18),11,OXBLOOD)
+	_write("TURN?" if not intact else "VOLTA",Vector2(108,cy-20),11,OXBLOOD)
 
 
 # Single model for all annotations, feedback and formal completion.
@@ -522,21 +525,15 @@ func _evaluate_form(intact: bool) -> Dictionary:
 	return _analyze_composition(intact)
 
 func _draw_form_report(model: Dictionary) -> void:
-	# The tray's final two rows are reserved for a compact, non-overlapping report.
-	var left := 909.0
-	var right := 1050.0
-	_write("FORM IN PROGRESS",Vector2(left,564),13,INK)
-	draw_line(Vector2(left,574),Vector2(1167,574),Color(INK,0.13),1.0)
-	_write("LINES  %d / 14" % int(model["filled"]),Vector2(left,595),13,TEAL)
-	_write("RHYME  %d / 7" % int(model["rhymes"]),Vector2(right,595),13,COPPER)
-	_write("10 SYLL  %d / 14" % int(model["ten"]),Vector2(left,617),13,TEAL)
-	_write("OPEN %d · ? %d" % [int(model["rhyme_obligations"].size()),int(model["tentative_rhymes"])],Vector2(right,617),13,COPPER)
-	if bool(model["formal"]):
-		_write("FORMAL CANDIDATE · %d RHYMES TENTATIVE · STRESS OPEN." % int(model["tentative_rhymes"]),Vector2(110,703),15,OXBLOOD)
-	elif bool(model["complete"]):
-		_write("All words placed. The form can still change.",Vector2(110,703),15,OXBLOOD)
-	elif int(model["used"]) > 0:
-		_write("%d words placed; more than one reading is possible." % int(model["used"]),Vector2(110,703),13,Color(INK,0.55))
+	# Dedicated sidebar footer, separate from the word tray and page navigation.
+	var left := 910.0
+	draw_line(Vector2(left,568),Vector2(1168,568),Color(INK,0.17),1.0)
+	_write("YOUR COMPOSITION",Vector2(left,589),15,INK)
+	_write("%d of 14 lines contain words" % int(model["filled"]),Vector2(left,611),15,TEAL)
+	_write("%d of 7 rhyme pairs connected" % int(model["rhymes"]),Vector2(left,633),14,COPPER)
+	_write("%d lines have ten syllables" % int(model["ten"]),Vector2(left,654),14,TEAL)
+	if bool(model["complete"]):
+		_write("All words placed. Press R to read.",Vector2(110,701),15,OXBLOOD)
 
 # Keep assembled words as a readable sequence after every drop.
 # The left-to-right order is taken from the drop positions; subsequent words
@@ -558,6 +555,9 @@ func _draw() -> void:
 func _write(t: String, at: Vector2, font_size: int, color: Color, use_gothic := false) -> void:
 	draw_string(gothic if use_gothic else body_font, at, t, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
+func _write_fitted(t: String, at: Vector2, font_size: int, color: Color, max_width: float) -> void:
+	draw_string(body_font,at,t,HORIZONTAL_ALIGNMENT_LEFT,max_width,font_size,color,TextServer.JUSTIFICATION_NONE,TextServer.DIRECTION_AUTO,TextServer.ORIENTATION_HORIZONTAL)
+
 func _page() -> void:
 	_write("In Countless Shadows", Vector2(105,73), 40, INK, true)
 	draw_line(Vector2(105,87),Vector2(1175,87),Color(INK,0.16),1.0)
@@ -571,26 +571,23 @@ func _page() -> void:
 			draw_line(Vector2(129,baseline_y + 8.0),Vector2(862,baseline_y + 8.0),Color(INK,0.065),1.0)
 	if show_help and not intro_active and not _has_raised() and dragging < 0:
 		_write("Lift a word from the ink at right.",Vector2(300,385),22,Color(INK,0.28))
-	_write("SONNET XVII  ·  MOVABLE TYPE",Vector2(907,113),13,Color(INK,0.48))
+	_write("SONNET XVII  ·  WORD BANK",Vector2(907,116),15,INK)
 	if not intro_active:
-		_write("TYPE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(909,676), 16, INK)
+		_write("PAGE %d / %d    ‹  ›" % [tray_page + 1, int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))], Vector2(909,548), 16, INK)
 	elif intro_elapsed < INTRO_HOLD:
 		_write("CLICK TO RELEASE THE TYPE", Vector2(110,106), 14, Color(INK,0.45))
-	draw_line(Vector2(892,104),Vector2(892,691),Color(INK,0.13),1.0)
+	draw_line(Vector2(892,104),Vector2(892,678),Color(INK,0.13),1.0)
 	if not intro_active:
-		_write("˘ / ?  STRESS HYPOTHESIS", Vector2(128,112), 12, TEAL)
-		_write("≈  RHYME", Vector2(252,112), 12, COPPER)
-		_write("↺  ECHO / PAUSE", Vector2(368,112), 12, VIOLET)
-		_write("◇  TENSION", Vector2(548,112), 12, OXBLOOD)
+		_write("Drag words into the lines. Press H for detailed poetic marks.",Vector2(129,113),16,Color(INK,0.65))
 	var intact := intro_active and intro_elapsed <= INTRO_HOLD
 	var model := _analyze_composition(intact) if not intro_active or intact else {}
 	if not intro_active:
 		_draw_form_report(model)
-		_write("S SAVE   L LOAD   E EXPORT   R READ   CMD+Z UNDO",Vector2(905,697),11,Color(INK,0.62))
+		_write("S Save  ·  L Load  ·  E Export  ·  R Read",Vector2(910,679),13,Color(INK,0.7))
 	_draw_formal_overlay(model,intact)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
-		if intro_active or not bool(pieces[i]["raised"]) or i == dragging:
+		if not show_detail or intro_active or not bool(pieces[i]["raised"]) or i == dragging:
 			continue
 		for j in range(pieces.size()):
 			if i == j or not bool(pieces[j]["raised"]) or j == dragging or not _neighbor(i,j):
@@ -611,9 +608,9 @@ func _page() -> void:
 		_draw_drop_preview()
 	if reading_view and not intro_active:
 		_draw_reading_view(model)
-	if discoveries.size() > 0 and not reading_view:
+	if discoveries.size() > 0 and not reading_view and dragging < 0:
 		var last: String = discoveries[discoveries.size()-1]
-		_write(last,Vector2(110,678),13,OXBLOOD)
+		_write_fitted(last,Vector2(110,701),15,OXBLOOD,760.0)
 func _drop_target(p: Vector2, id: int) -> Dictionary:
 	var line_number := roundi((p.y - 142.5) / 39.0)
 	var target_y := 142.5 + float(line_number) * 39.0
@@ -635,9 +632,9 @@ func _draw_drop_preview() -> void:
 		var x: float = target["x"]
 		var y := 123.0 + float(target["line"])*39.0
 		draw_line(Vector2(x,y-4),Vector2(x,y+30),TEAL,2.0)
-		_write("LINE %d · INSERT %d" % [int(target["line"])+1,int(target["index"])+1],Vector2(110,678),13,TEAL)
+		_write("Line %d · position %d" % [int(target["line"])+1,int(target["index"])+1],Vector2(110,701),15,TEAL)
 	else:
-		_write(str(target["reason"]),Vector2(110,678),13,OXBLOOD)
+		_write_fitted(str(target["reason"]),Vector2(110,701),15,OXBLOOD,760.0)
 
 func _draw_reading_view(model: Dictionary) -> void:
 	draw_rect(Rect2(93,92,1095,610),PAPER)
@@ -679,7 +676,7 @@ func _draw_piece(i: int) -> void:
 				draw_circle(Vector2(drip_x,drip_y),2.2,Color(INK,0.72))
 	elif on_page:
 		draw_line(r.position+Vector2(4,37),r.position+Vector2(r.size.x-4,37),Color(INK,0.15),1.0)
-	_write(word,r.position+Vector2(4,23),20,INK,true)
+	_write(word,r.position+Vector2(4,23),20,INK)
 	# Scansion marks are drawn centrally by _draw_formal_overlay().
 	if i == dragging:
 		for j in range(pieces.size()):
@@ -695,6 +692,11 @@ func _draw_piece(i: int) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if not intro_active and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_H:
+			show_detail = not show_detail
+			queue_redraw()
+			accept_event()
+			return
 		if event.keycode == KEY_R:
 			reading_view = not reading_view
 			queue_redraw()
@@ -759,7 +761,7 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var p := _local_point(event.position)
 		if event.pressed:
-			if Rect2(900,646,275,52).has_point(p):
+			if Rect2(900,517,275,40).has_point(p):
 				tray_page = (tray_page + 1) % int(ceil(float(tray_indices.size()) / float(TRAY_PAGE_SIZE)))
 				queue_redraw()
 				accept_event()
