@@ -26,7 +26,7 @@ const LEVELS := [
 		"mode":"rhyme_pair",
 		"first_stem":"But were some child of yours alive that",
 		"second_stem":"You should live twice; in it, and in my",
-		"choices":["time","rhyme","song","age"],
+		"choices":["time","rhyme","eyes","lies","age","rage"],
 		"solution":["time","rhyme"],
 		"next":"sonnet17_full"
 	},
@@ -77,8 +77,23 @@ static func turn_reading(level: Dictionary, order: Array) -> Dictionary:
 		return {"heading":"A condition before the doubt","lines":["The possible child leads the passage.","The poet's doubt now interrupts it.","Which thought feels like a reply?"]}
 	return {"heading":"An unsettled turn","lines":["The doubt begins the passage.","The final thought changes its direction.","Try placing the condition between them."]}
 
-static func rhyme_match(level: Dictionary, selected: Array) -> bool:
+static func rhyme_evaluation(level: Dictionary, selected: Array) -> Dictionary:
 	if str(level.get("mode","")) != "rhyme_pair" or selected.size() != 2:
-		return false
-	var solution: Array = level.get("solution",[])
-	return selected[0] == solution[0] and selected[1] == solution[1]
+		return {"status":"incomplete","heading":"Choose two endings","detail":"Place one word in each line."}
+	var a := str(selected[0])
+	var b := str(selected[1])
+	if a.is_empty() or b.is_empty():
+		return {"status":"incomplete","heading":"An echo is waiting","detail":"Choose an ending for each line."}
+	if a == b:
+		return {"status":"invalid","heading":"One word, two places","detail":"Each movable word can only be used once."}
+	var evidence: String = PoemData.rhyme_evidence(a,b)
+	if evidence == "supported":
+		var solution: Array = level.get("solution",[])
+		var original := a == str(solution[0]) and b == str(solution[1])
+		return {"status":"supported","heading":"A rhyme connects these lines","detail":"These endings share a recorded sound family.","original":original}
+	if evidence == "possible":
+		return {"status":"possible","heading":"A possible echo","detail":"This pairing has an editorial or historical uncertainty."}
+	return {"status":"unknown","heading":"No recorded rhyme yet","detail":"Try another pair. This lexicon is incomplete."}
+
+static func rhyme_match(level: Dictionary, selected: Array) -> bool:
+	return str(rhyme_evaluation(level,selected).get("status","")) == "supported"
