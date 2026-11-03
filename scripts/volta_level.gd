@@ -9,7 +9,7 @@ var level: Dictionary = {}
 var order: Array = []
 var selected := -1
 var discovered := false
-var revealed := false
+var ever_discovered := false
 var body_font: Font
 var display_font: Font
 var slots: Array[Rect2] = []
@@ -54,22 +54,19 @@ func _draw() -> void:
 			_label(lines[j],rect.position+Vector2(18,55+j*25),21,INK,body_font,730)
 	draw_line(Vector2(895,280),Vector2(895,675),Color(INK,0.22),1.0)
 	_label("WHAT CHANGED?",Vector2(925,317),19,INK)
-	if discovered:
-		_label("You made a turn.",Vector2(925,357),20,TEAL)
-		_label("The doubt is answered",Vector2(925,390),17,INK)
-		_label("by a possibility.",Vector2(925,413),17,INK)
-		_label("This is a volta:",Vector2(925,451),17,COPPER)
-		_label("a change in thought.",Vector2(925,475),17,COPPER)
-	else:
-		_label("Try changing the order.",Vector2(925,357),18,INK)
-		_label("What becomes a response?",Vector2(925,388),17,INK)
-		_label("What becomes a premise?",Vector2(925,412),17,INK)
+	var reading: Dictionary = PuzzleLevels.turn_reading(level,order)
+	_label(str(reading["heading"]),Vector2(925,357),19,TEAL if discovered else INK,body_font,220)
+	var feedback_lines: Array = reading["lines"]
+	for j in range(feedback_lines.size()):
+		_label(str(feedback_lines[j]),Vector2(925,390+j*24),16,INK,body_font,220)
+	if ever_discovered:
+		_label("VOLTA · a turn in thought",Vector2(925,485),16,COPPER,body_font,220)
 	draw_rect(reset_button,Color("#fffaf1"))
 	draw_rect(reset_button,Color(INK,0.3),false,1.0)
 	_label("Reset arrangement",reset_button.position+Vector2(15,29),18,INK)
-	if discovered:
+	if ever_discovered:
 		draw_rect(next_button,TEAL)
-		_label("Explore the whole sonnet",next_button.position+Vector2(12,32),18,PAPER)
+		_label("Continue to rhyme",next_button.position+Vector2(12,32),18,PAPER)
 	else:
 		_label("Discover a turn to continue",Vector2(925,640),16,Color(INK,0.6),body_font,225)
 	_label("Sonnet 17  ·  Shakespeare",Vector2(90,683),16,Color(INK,0.6))
@@ -85,8 +82,8 @@ func _gui_input(event: InputEvent) -> void:
 		queue_redraw()
 		accept_event()
 		return
-	if discovered and next_button.has_point(point):
-		get_tree().change_scene_to_file("res://scenes/sonnet_player.tscn")
+	if ever_discovered and next_button.has_point(point):
+		get_tree().change_scene_to_file("res://scenes/rhyme_level.tscn")
 		accept_event()
 		return
 	for i in range(slots.size()):
@@ -101,6 +98,8 @@ func _gui_input(event: InputEvent) -> void:
 				order[i] = previous
 				selected = -1
 				discovered = PuzzleLevels.discovered_turn(level,order)
+				if discovered:
+					ever_discovered = true
 			queue_redraw()
 			accept_event()
 			return
