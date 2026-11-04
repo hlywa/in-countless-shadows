@@ -22,6 +22,15 @@ func _initialize() -> void:
 		var estimate: Dictionary = PuzzleLevels.meter_reading(reading["words"])
 		check(int(estimate["syllables"]) == 10,"Both authored readings should have ten estimated syllables")
 		check(estimate["ten_positions"],"Ten-position result must be explicit")
+		var alternate: Array = []
+		for i in range(int(estimate["syllables"])):
+			alternate.append(i % 2 == 1)
+		var standard: Dictionary = PuzzleLevels.stress_comparison(reading["words"],alternate)
+		check(standard["valid"] and int(standard["departures"]) == 0,"Alternating emphasis should match its own model")
+		alternate[0] = not bool(alternate[0])
+		var varied: Dictionary = PuzzleLevels.stress_comparison(reading["words"],alternate)
+		check(varied["valid"] and int(varied["departures"]) == 1,"Player emphasis change must register as a departure")
+		check(not PuzzleLevels.stress_comparison(reading["words"],[true])["valid"],"Wrong-sized emphasis array must be rejected")
 	check(PuzzleLevels.rhyme_match(rhyme,["time","rhyme"]),"Authored rhyme should complete")
 	check(not PuzzleLevels.rhyme_match(rhyme,["song","age"]),"Unrelated endings must not complete")
 	check(PuzzleLevels.rhyme_match(rhyme,["eyes","lies"]),"Alternative supported rhyme should complete")
