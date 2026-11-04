@@ -8,6 +8,7 @@ func _initialize() -> void:
 	for path in [
 		"res://main.tscn",
 		"res://scenes/title_screen.tscn",
+		"res://scenes/level_select.tscn",
 		"res://scenes/volta_level.tscn",
 		"res://scenes/rhyme_level.tscn",
 		"res://scenes/meter_level.tscn",
