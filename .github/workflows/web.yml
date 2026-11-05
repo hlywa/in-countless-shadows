@@ -1,0 +1,60 @@
+name: Publish playable web build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Download Godot and matching export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="4.7"
+          TAG="${VERSION}-stable"
+          wget -q "https://github.com/godotengine/godot/releases/download/${TAG}/Godot_v${VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp
+          sudo install -m 755 "/tmp/Godot_v${VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          wget -q "https://github.com/godotengine/godot/releases/download/${TAG}/Godot_v${VERSION}-stable_export_templates.tpz" -O /tmp/templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/${VERSION}.stable"
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          cp /tmp/godot-templates/templates/* "$HOME/.local/share/godot/export_templates/${VERSION}.stable/"
+
+      - name: Import project
+        run: godot --headless --path . --editor --quit
+
+      - name: Export HTML5
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -s build/web/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
