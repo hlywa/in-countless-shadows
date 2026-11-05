@@ -41,11 +41,23 @@ jobs:
       - name: Import project
         run: godot --headless --path . --editor --quit
 
+      - name: Run headless project tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in test_poem_data test_composition test_puzzle_levels test_scene_smoke test_navigation; do
+            echo "::group::${test}"
+            godot --headless --path . --script "res://tests/${test}.gd"
+            echo "::endgroup::"
+          done
+
       - name: Export HTML5
         run: |
           mkdir -p build/web
           godot --headless --path . --export-release "Web" build/web/index.html
           test -s build/web/index.html
+          echo "Web build files:"
+          du -h build/web/* | sort -h
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
