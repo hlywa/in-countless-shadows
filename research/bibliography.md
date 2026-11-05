@@ -1,31 +1,26 @@
-# Annotated bibliography
+# Sources and reading
 
-**Status:** Working reading map. Entries below are leads identified in the existing paper, revision notes, and advisor discussion. Annotations describe their potential relevance, not verified quotations or claims of completed reading. Add editions, page numbers, and confirmed publication details as sources are checked.
+## Sonnet 17 and the art of the sonnet
 
-## Literary form, Shakespeare, and possible worlds
-- **Simon Palfrey, *Shakespeare's Possible Worlds*.** Key theoretical interlocutor on possibility and interpretation. Identify precisely what a playable model contributes beyond illustrating this account.
-- **Gina Bloom, *Gaming the Stage: Playable Media and the Rise of English Commercial Theater*.** Historical account of play and theatrical spectatorship; investigate limits of transferring claims about theater to lyric reading.
-- **Stephen Booth, *An Essay on Shakespeare's Sonnets*.** Close reading and semantic overdetermination; compare interpretive multiplicity with formal computational models.
-- **Tiffany Stern, *Documents of Performance in Early Modern England*.** Earlier paper source; establish whether and how performance-document scholarship informs the argument.
-- **Folger Shakespeare Library, Sonnet 17.** Primary text and editorial reference; record edition and textual variants when encoding meter and rhyme. https://www.folger.edu/explore/shakespeares-works/shakespeares-sonnets/read/17/
+- **William Shakespeare, Sonnet 17.** The primary text. [Folger Shakespeare Library](https://www.folger.edu/explore/shakespeares-works/shakespeares-sonnets/read/17/). Editorial choices, especially punctuation and the pronunciation of *stretchèd*, matter when we turn the poem into software.
+- **Helen Vendler, *The Art of Shakespeare's Sonnets* (Harvard University Press, 1997).** Introduction, pp. 1–41; Sonnet 17, pp. 116–118. Vendler reads the poem's linguistic structures as a developing experience, including its two visions of future readers and the yellowed page.
+- **Stephen Booth, *An Essay on Shakespeare's Sonnets* (1969), and his edition of *Shakespeare's Sonnets* (1977).** An essential counterpoint to Vendler on overlapping structures and interpretive multiplicity.
+- **Katherine Duncan-Jones, ed., *Shakespeare's Sonnets* (Arden Shakespeare).** A textual and historical reference for decisions the game might otherwise make invisibly.
+- **Simon Palfrey, *Shakespeare's Possible Worlds*.** A theoretical conversation about literary possibility. The game needs to find something through play rather than simply put this argument on-screen.
 
-## Media history and literacy (advisor leads)
-- **Walter J. Ong, work on orality and literacy.** Compare recitation, memory, and written interpretation without positing a simplistic media succession.
-- **Marshall McLuhan, work on media transformations.** Ask how a medium reorganizes interpretive activity; check specific text before citing.
-- **Gregory Ulmer, work on electracy.** Potential frame for computational/digital literacy; define what the framework explains in this project.
-- **Historical Shakespeare pedagogy, riddle traditions, commonplace books, and memorization.** Research primary evidence of how people actually learned and manipulated verse.
+## Reading, performance, and media
 
-## Games, computation, and learning
-- **Stephanie Boluk and Patrick Lemieux, *Metagaming*.** Rules, players, and activity beyond the bounded software artifact.
-- **Noah Wardrip-Fruin, *Expressive Processing*.** How operational processes contribute to expressive meaning.
-- **Craig Anderson and David DeLiema, work on *Baba Is You* and playful problem solving.** Investigate noticing, hypothesizing, and intervening; confirm specific publications and terminology.
-- **Manu Kapur, work on productive failure.** Consider whether unsuccessful formal moves support deeper learning; avoid assuming transfer.
-- **Nick Montfort, work on computational poetics and exploratory programming.** Situate playable textual systems within electronic literature and computational practice.
-- **Oulipo / Raymond Queneau, *Cent mille milliards de poèmes*.** Combinatorial poetic precedent: formal compatibility can allow multiple outcomes.
-- **Zach Gage: *TypeShift*, *Knotwords*, *SpellTower*, *Really Bad Chess*.** Design precedents for approachable interactions and interlocking constraints, not scholarly evidence unless analyzed as cases.
+- **Gina Bloom, *Gaming the Stage: Playable Media and the Rise of English Commercial Theater*.** A history of play and spectatorship that may complicate the distinction between interpretation and action.
+- **Tiffany Stern, *Documents of Performance in Early Modern England*.** A resource for thinking about text as an object used in performance, rather than only as something silently read.
+- **Walter J. Ong, *Orality and Literacy*.** A starting point for questions about memory, recitation, and the changing material conditions of reading.
+- **Marshall McLuhan and Gregory Ulmer.** Possible interlocutors on media and literacy, but broad media theory cannot substitute for evidence about how people actually encountered verse.
 
-## To verify next
-- Exact editions, bibliographic details, and page references for all academic sources.
-- Historical evidence for sonnet instruction, recitation, riddles, and annotation.
-- Empirical literature on literary reading and interactive learning.
-- Any claim about contemporary literacy decline or AI-mediated interpretation.
+## Computational and playable language
+
+- **Stephanie Boluk and Patrick Lemieux, *Metagaming*.** The activities around a game matter alongside its encoded rules.
+- **Noah Wardrip-Fruin, *Expressive Processing*.** A way to think about how a program's processes participate in expression.
+- **Nick Montfort, writing on computational poetics.** A broader context for text that can be generated, transformed, and played.
+- **Raymond Queneau, *Cent mille milliards de poèmes*, and Oulipo.** Poetic combination as an artistic practice, not a new idea invented by software.
+- **Zach Gage and Jack Schlesinger, *Knotwords*; Zach Gage's *TypeShift*, *SpellTower*, and *Really Bad Chess*.** Design references. The useful lesson is how the rules are encountered and combined, not a visual style to imitate.
+
+Historical work on sonnet teaching, commonplace books, riddles, and memorization remains an important gap. So does careful observation of how actual players read, rather than assumptions about what games teach them.
