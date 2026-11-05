@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://gy80785kokyc"]
 
-[ext_resource type="Script" path="res://scripts/sonnet_player.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cncr3lb6ful5j" path="res://scripts/sonnet_player.gd" id="1_script"]
 
-[node name="SonnetPlayer" type="Control"]
+[node name="SonnetPlayer" type="Control" unique_id=133461297]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
