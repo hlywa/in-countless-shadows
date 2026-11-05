@@ -33,6 +33,8 @@ var selected_line := 11
 var impression := 0.0
 var undo_stack: Array[Dictionary] = []
 var click_regions: Array[Dictionary] = []
+var shadow_trace: Array[String] = []
+var traversal_count := 0
 
 func _ready() -> void:
 	ink_font = ThemeDB.fallback_font
@@ -99,9 +101,19 @@ func _draw_page() -> void:
 		_print("This word occupies two", Vector2(903, 449), 13, FADED)
 		_print("syllabic positions.", Vector2(903, 467), 13, FADED)
 		_button(Rect2(903, 483, 268, 36), "COMPRESS TYPE" if stretch_open else "STRETCH TYPE", "stretch")
+		if stretch_open:
+			_print("The expanded word unlocks", Vector2(903, 548), 13, BLUE)
+			_print("the F-rhyme passage.", Vector2(903, 567), 13, BLUE)
 	else:
 		_print("Select line 12 to try", Vector2(903, 425), 14, FADED)
 		_print("the first type operation.", Vector2(903, 445), 14, FADED)
+	if stretch_open and selected_line in [9, 11]:
+		var partner: int = PoemData.rhyme_partner(selected_line)
+		var destination: String = "TONGUE / LINE 10" if partner == 9 else "SONG / LINE 12"
+		_button(Rect2(903, 578, 268, 36), "TRAVERSE TO " + destination, "traverse")
+	if not shadow_trace.is_empty():
+		_print("SHADOW TRACE", Vector2(903, 620), 12, BLUE)
+		_print("  →  ".join(shadow_trace), Vector2(903, 640), 13, INK)
 	draw_line(Vector2(75, 660), Vector2(1205, 660), Color(INK, 0.4), 1)
 	_button(Rect2(76, 674, 195, 34), "HIDE METER" if show_meter else "EXPOSE METER", "meter")
 	_button(Rect2(281, 674, 195, 34), "HIDE RHYME" if show_rhyme else "SHOW RHYME", "rhyme")
@@ -140,12 +152,16 @@ func _apply(region: Dictionary) -> void:
 			show_meter = previous.meter
 			show_rhyme = previous.rhyme
 			stretch_open = previous.stretch
+			shadow_trace = previous.trace.duplicate()
+			traversal_count = previous.traversals
 	elif action == "reset":
 		_save_undo()
 		selected_line = 11
 		show_meter = false
 		show_rhyme = false
 		stretch_open = false
+		shadow_trace.clear()
+		traversal_count = 0
 	else:
 		_save_undo()
 		match action:
@@ -157,9 +173,21 @@ func _apply(region: Dictionary) -> void:
 				show_rhyme = not show_rhyme
 			"stretch":
 				stretch_open = not stretch_open
+				if stretch_open:
+					show_rhyme = true
+				else:
+					shadow_trace.clear()
+					traversal_count = 0
+			"traverse":
+				if stretch_open and selected_line in [9, 11]:
+					if shadow_trace.is_empty():
+						shadow_trace.append("song" if selected_line == 11 else "tongue")
+					selected_line = PoemData.rhyme_partner(selected_line)
+					shadow_trace.append("song" if selected_line == 11 else "tongue")
+					traversal_count += 1
 	queue_redraw()
 
 func _save_undo() -> void:
-	undo_stack.append({"line": selected_line, "meter": show_meter, "rhyme": show_rhyme, "stretch": stretch_open})
+	undo_stack.append({"line": selected_line, "meter": show_meter, "rhyme": show_rhyme, "stretch": stretch_open, "trace": shadow_trace.duplicate(), "traversals": traversal_count})
 	if undo_stack.size() > 60:
 		undo_stack.pop_front()

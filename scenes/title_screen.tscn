@@ -11,6 +11,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_sa3yf")
+theme_type_variation = &"button"
 
 [node name="Title" type="Label" parent="." unique_id=219333738]
 layout_mode = 0
@@ -25,13 +26,19 @@ text = "IN COUNTLESS SHADOWS"
 
 [node name="StartButton" type="Label" parent="." unique_id=309248294]
 layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
+offset_left = 441.0
+offset_top = 485.0
+offset_right = 518.0
+offset_bottom = 552.0
+theme_override_colors/font_color = Color(0.09019608, 0.078431375, 0.06666667, 1)
 text = "BEGIN
 "
 
 [node name="SettingsButton" type="Label" parent="." unique_id=546795529]
 layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
+offset_left = 750.0
+offset_top = 483.0
+offset_right = 880.0
+offset_bottom = 515.0
+theme_override_colors/font_color = Color(0.09019608, 0.078431375, 0.06666667, 1)
 text = "SETTINGS."
