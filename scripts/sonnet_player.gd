@@ -20,6 +20,7 @@ const TRAY_COLS := 2
 const TRAY_PAGE_SIZE := TRAY_ROWS * TRAY_COLS
 # First Folio-style spelling is not enforced; this is a complete modernized Sonnet 17.
 # A syllable count is an editorial reading, not a verdict on spoken performance.
+var menu_button := Rect2(1040, 18, 205, 48)
 const SONNET_LINES := [
 	"Who will believe my verse in time to come,",
 	"If it were fill'd with your most high deserts?",
@@ -567,6 +568,7 @@ func _draw() -> void:
 	draw_set_transform(_offset(), 0.0, Vector2(_scale(),_scale()))
 	_page()
 	draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
+	_draw_menu_button()
 
 func _write(t: String, at: Vector2, font_size: int, color: Color, use_gothic := false) -> void:
 	draw_string(gothic if use_gothic else body_font, at, t, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
@@ -706,7 +708,15 @@ func _draw_piece(i: int) -> void:
 				_ink_outline(target,ink_color)
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
+func _draw_menu_button() -> void:
+	draw_rect(menu_button, Color("#477e7b"))
+	_write("← Main menu", menu_button.position + Vector2(16, 31), 21, PAPER)
+
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and menu_button.has_point(event.position):
+		get_tree().change_scene_to_file("res://main.tscn")
+		accept_event()
+		return
 	if not intro_active and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_H:
 			show_detail = not show_detail
