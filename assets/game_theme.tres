@@ -1,0 +1,6 @@
+[gd_resource type="Theme" format=3 uid="uid://cc62dhjmvlc1q"]
+
+[ext_resource type="FontFile" uid="uid://k6fc3x7ulyiv" path="res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf" id="1_tgk0f"]
+
+[resource]
+default_font = ExtResource("1_tgk0f")

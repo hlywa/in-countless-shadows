@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://b887g2lkopnv2"]
+
+[ext_resource type="FontFile" uid="uid://k6fc3x7ulyiv" path="res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf" id="1_fgkus"]
+[ext_resource type="Theme" uid="uid://cc62dhjmvlc1q" path="res://assets/game_theme.tres" id="1_sa3yf"]
+
+[node name="TitleScreen" type="Control" unique_id=720421628]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_sa3yf")
+
+[node name="Title" type="Label" parent="." unique_id=219333738]
+layout_mode = 0
+offset_left = 208.0
+offset_top = 319.0
+offset_right = 1103.0
+offset_bottom = 415.0
+theme_override_colors/font_color = Color(0.09019608, 0.078431375, 0.06666667, 1)
+theme_override_fonts/font = ExtResource("1_fgkus")
+theme_override_font_sizes/font_size = 72
+text = "IN COUNTLESS SHADOWS"
+
+[node name="StartButton" type="Label" parent="." unique_id=309248294]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+text = "BEGIN
+"
+
+[node name="SettingsButton" type="Label" parent="." unique_id=546795529]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+text = "SETTINGS."
