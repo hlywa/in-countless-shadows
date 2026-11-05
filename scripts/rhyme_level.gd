@@ -14,6 +14,7 @@ var discovered_once := false
 var choice_rects: Array[Rect2] = []
 var continue_rect := Rect2(900,580,260,58)
 var reset_rect := Rect2(900,510,260,45)
+var line_rects: Array[Rect2] = []
 
 func _ready() -> void:
 	level = PuzzleLevels.get_level("sonnet17_rhyme")
@@ -32,8 +33,10 @@ func _draw() -> void:
 	_label(str(level["subtitle"]),Vector2(90,184),20,COPPER)
 	_label(str(level["instruction"]),Vector2(90,229),20)
 	_label("Select a line, then choose its ending.",Vector2(90,260),17,Color(INK,0.65))
+	line_rects.clear()
 	for i in range(2):
 		var rect := Rect2(90,290+i*105,770,85)
+		line_rects.append(rect)
 		draw_rect(rect,Color(TEAL,0.10) if active_slot == i else Color("#fffaf1"))
 		draw_rect(rect,TEAL if active_slot == i else Color(INK,0.2),false,2.0 if active_slot == i else 1.0)
 		var stem := str(level["first_stem"]) if i == 0 else str(level["second_stem"])
@@ -80,9 +83,9 @@ func _gui_input(event: InputEvent) -> void:
 		get_tree().change_scene_to_file("res://scenes/meter_level.tscn")
 		accept_event()
 		return
-	elif Rect2(90,290,770,85).has_point(point):
+	elif line_rects.size() > 0 and line_rects[0].has_point(point):
 		active_slot = 0
-	elif Rect2(90,395,770,85).has_point(point):
+	elif line_rects.size() > 1 and line_rects[1].has_point(point):
 		active_slot = 1
 	else:
 		for j in range(choice_rects.size()):

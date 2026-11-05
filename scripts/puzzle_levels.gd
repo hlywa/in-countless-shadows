@@ -126,3 +126,22 @@ static func meter_reading(words: Array) -> Dictionary:
 			slots.append({"word":spelling,"position":total+i+1})
 		total += count
 	return {"syllables":total,"unknown_words":unknown,"slots":slots,"ten_positions":total == 10}
+
+# User-marked emphasis is an experiment, not an automatic scansion.
+# Each index corresponds to a syllable position in meter_reading().
+static func stress_comparison(words: Array, emphasized: Array) -> Dictionary:
+	var reading: Dictionary = meter_reading(words)
+	var count: int = int(reading["syllables"])
+	if emphasized.size() != count:
+		return {"valid":false,"aligned":0,"departures":0,"count":count}
+	var aligned := 0
+	var departures := 0
+	for i in range(count):
+		if not (emphasized[i] is bool):
+			return {"valid":false,"aligned":0,"departures":0,"count":count}
+		var expected_strong := i % 2 == 1
+		if bool(emphasized[i]) == expected_strong:
+			aligned += 1
+		else:
+			departures += 1
+	return {"valid":true,"aligned":aligned,"departures":departures,"count":count}

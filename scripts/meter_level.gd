@@ -17,6 +17,8 @@ var choice_rects: Array[Rect2] = []
 var play_rect := Rect2(90,570,230,55)
 var next_rect := Rect2(885,570,300,55)
 var pulse_rects: Array[Rect2] = []
+var emphasis: Array = []
+var has_edited := false
 
 func _ready() -> void:
 	level = PuzzleLevels.get_level("sonnet17_measure")
@@ -25,7 +27,15 @@ func _ready() -> void:
 	display_font = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf") else body_font
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_reset_emphasis()
 	set_process(true)
+
+func _reset_emphasis() -> void:
+	var reading: Dictionary = PuzzleLevels.meter_reading(readings[reading_index]["words"])
+	emphasis.clear()
+	for i in range(int(reading["syllables"])):
+		emphasis.append(i % 2 == 1)
+	has_edited = false
 
 func _process(delta: float) -> void:
 	if not playing:
@@ -49,7 +59,7 @@ func _draw() -> void:
 	_label(str(level["title"]),Vector2(90,150),27)
 	_label(str(level["subtitle"]),Vector2(90,184),20,COPPER)
 	_label(str(level["instruction"]),Vector2(90,229),20)
-	_label("The pulse below is a visual counting aid, not a prescribed performance.",Vector2(90,258),17,Color(INK,0.65))
+	_label("Tap a syllable position to change its emphasis. Play to follow your pattern.",Vector2(90,258),17,Color(INK,0.65))
 	choice_rects.clear()
 	for i in range(readings.size()):
 		var rect := Rect2(90+i*395,295,375,60)
@@ -72,9 +82,14 @@ func _draw() -> void:
 	for i in range(count):
 		var rect := Rect2(90+i*step,515,step-8,24)
 		pulse_rects.append(rect)
-		var strong := i % 2 == 1
-		draw_rect(rect,TEAL if playing and pulse_index == i else Color(COPPER,0.45) if strong else Color(INK,0.12))
-	_label("Alternating positions suggest a pattern; actual speech can depart from it.",Vector2(90,558),15,Color(INK,0.7))
+		var strong: bool = bool(emphasis[i]) if i < emphasis.size() else i % 2 == 1
+		draw_rect(rect,TEAL if playing and pulse_index == i else Color(COPPER,0.72) if strong else Color(INK,0.12))
+		_label(str(i+1),rect.position+Vector2(8,18),13,PAPER if playing and pulse_index == i else INK)
+	var comparison: Dictionary = PuzzleLevels.stress_comparison(words,emphasis)
+	var summary := "Tap the bars to try a different emphasis pattern."
+	if has_edited and bool(comparison["valid"]):
+		summary = "%d positions depart from the alternating model. Neither reading is definitive." % int(comparison["departures"])
+	_label(summary,Vector2(90,558),15,Color(INK,0.7))
 	draw_rect(play_rect,TEAL)
 	_label("Pause" if playing else "Play visual pulse",play_rect.position+Vector2(18,35),20,PAPER)
 	if explored:
@@ -82,7 +97,7 @@ func _draw() -> void:
 		_label("Explore the whole sonnet",next_rect.position+Vector2(16,35),20,PAPER,body_font,275)
 	else:
 		_label("Try the pulse to continue",Vector2(885,604),18,COPPER)
-	_label("No audio or automatic scansion is implied.",Vector2(90,683),16,Color(INK,0.65))
+	_label("Visual timing only. Emphasis marks are your interpretation.",Vector2(90,683),16,Color(INK,0.65))
 
 func _gui_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
@@ -92,6 +107,14 @@ func _gui_input(event: InputEvent) -> void:
 		get_tree().change_scene_to_file("res://scenes/sonnet_player.tscn")
 		accept_event()
 		return
+	for i in range(pulse_rects.size()):
+		if pulse_rects[i].grow(6).has_point(point):
+			emphasis[i] = not bool(emphasis[i])
+			has_edited = true
+			explored = true
+			queue_redraw()
+			accept_event()
+			return
 	if play_rect.has_point(point):
 		playing = not playing
 		if playing:
@@ -106,6 +129,7 @@ func _gui_input(event: InputEvent) -> void:
 			reading_index = i
 			playing = false
 			pulse_index = -1
+			_reset_emphasis()
 			queue_redraw()
 			accept_event()
 			return
