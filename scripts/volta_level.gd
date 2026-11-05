@@ -5,6 +5,7 @@ const INK := Color("#181410")
 const TEAL := Color("#477e7b")
 const COPPER := Color("#a16b49")
 const OXBLOOD := Color("#a4484d")
+var menu_button := Rect2(1030, 20, 215, 48)
 var level: Dictionary = {}
 var order: Array = []
 var selected := -1
@@ -94,7 +95,17 @@ func _draw() -> void:
 		_wrapped("Discover a turn to continue",Vector2(925,650),245,16,Color(INK,0.6))
 	_label("Sonnet 17  ·  Shakespeare",Vector2(90,683),16,Color(INK,0.6))
 
+	_draw_menu_button()
+
+func _draw_menu_button() -> void:
+	draw_rect(menu_button, TEAL)
+	_label("← Main menu", menu_button.position + Vector2(14, 31), 21, PAPER)
+
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and menu_button.has_point(event.position):
+		get_tree().change_scene_to_file("res://main.tscn")
+		accept_event()
+		return
 	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
 		return
 	var point := get_local_mouse_position()
