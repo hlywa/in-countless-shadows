@@ -16,6 +16,10 @@ config/use_custom_user_dir=true
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="uid://b481pwaetp1px"
 
+[autoload]
+
+GameSettings="*res://scripts/game_settings.gd"
+
 [display]
 
 window/size/viewport_width=1280
