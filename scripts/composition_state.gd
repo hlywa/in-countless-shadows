@@ -2,7 +2,7 @@ extends RefCounted
 class_name CompositionState
 ## Logical word order is authoritative; screen coordinates are projections.
 const LINE_COUNT := 14
-var lines: Array[Array] = []
+var lines: Array = []
 var word_count := 0
 
 func _init(count: int = 0) -> void:
@@ -37,7 +37,7 @@ func restore(data: Array) -> bool:
 	if data.size() != LINE_COUNT:
 		return false
 	var seen := {}
-	var replacement: Array[Array] = []
+	var replacement: Array = []
 	for line in data:
 		if not (line is Array):
 			return false
@@ -60,8 +60,8 @@ func placed_count() -> int:
 		count += line.size()
 	return count
 
-func as_words(inventory: Array) -> Array[Array]:
-	var result: Array[Array] = []
+func as_words(inventory: Array) -> Array:
+	var result: Array = []
 	for line in lines:
 		var words: Array = []
 		for id in line:

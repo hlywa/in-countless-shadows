@@ -25,7 +25,10 @@ func _initialize() -> void:
 	_check(poem.turn_evidence(empty,marker,12)["possible"], "line-13 But is a turn clue")
 	var ambiguous: Array[String] = ["the","will","of","time"]
 	_check(poem.metrical_evidence(ambiguous)["unknown_words"] > 0, "function-word stress is uncertain")
-	var reading: Array[String] = ["life","tomb","truth","lies"]
+	var reading: Array = []
+	for n in range(14):
+		reading.append([])
+	reading[0] = ["life","tomb","truth","lies"]
 	_check(poem.reading_hypotheses(reading).size() >= 2, "interpretations can coexist")
 	print("PoemData regressions: ", "PASS" if failures == 0 else "%d FAILURES" % failures)
 	quit(0 if failures == 0 else 1)
