@@ -4,6 +4,7 @@ const REVEAL_DURATION := 3.1
 var title_label: Label
 var begin_label: Label
 var settings_label: Label
+var level_select_label: Label
 var elapsed := 0.0
 var ink_material: ShaderMaterial
 
@@ -12,6 +13,7 @@ func _ready() -> void:
 	title_label = get_node("Title") as Label
 	begin_label = get_node("StartButton") as Label
 	settings_label = get_node("SettingsButton") as Label
+	level_select_label = get_node("LevelSelectButton") as Label
 	# Render the font ONCE. Earlier overlapping draw_string passes caused
 	# doubled gray shadows and incorrect letter spacing.
 	title_label.visible = true
@@ -59,9 +61,16 @@ void fragment() {
 	ink_material.set_shader_parameter("glyph_count",float(maxi(1,title_label.text.length())))
 	begin_label.modulate.a = 0.0
 	settings_label.modulate.a = 0.0
+	level_select_label.modulate.a = 0.0
 	begin_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	begin_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	begin_label.gui_input.connect(_on_begin_input)
+	level_select_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	level_select_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	level_select_label.gui_input.connect(_on_level_select_input)
+	settings_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	settings_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	settings_label.gui_input.connect(_on_settings_input)
 
 func _process(delta: float) -> void:
 	elapsed += delta
@@ -71,9 +80,24 @@ func _process(delta: float) -> void:
 	var buttons := smoothstep(1.35,2.05,elapsed)
 	begin_label.modulate.a = buttons
 	settings_label.modulate.a = buttons
+	level_select_label.modulate.a = buttons
 	if elapsed >= REVEAL_DURATION:
 		set_process(false)
 
 func _on_begin_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		get_tree().change_scene_to_file("res://scenes/volta_level.tscn")
+
+func _on_level_select_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		get_tree().change_scene_to_file("res://scenes/level_select.tscn")
+
+func _on_settings_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		var dialog := AcceptDialog.new()
+		dialog.title = "Settings"
+		dialog.dialog_text = "Settings controls are not implemented yet. Use Level Select to explore the prototype."
+		add_child(dialog)
+		dialog.popup_centered()
+		dialog.confirmed.connect(dialog.queue_free)
+		dialog.canceled.connect(dialog.queue_free)
