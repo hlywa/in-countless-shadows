@@ -16,7 +16,7 @@ var hitboxes: Array[Rect2] = []
 var back_rect := Rect2(90,620,220,55)
 
 func _ready() -> void:
-	body_font = load("res://assets/fonts/EB_Garamond/EBGaramond-VariableFont_wght.ttf")
+	body_font = ThemeDB.fallback_font # Avoid variable-font glyph failures in the Web renderer.
 	display_font = load("res://assets/fonts/UnifrakturCook/UnifrakturCook-Bold.ttf")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
