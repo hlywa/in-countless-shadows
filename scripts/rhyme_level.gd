@@ -71,7 +71,13 @@ func _draw() -> void:
 		_label("Continue to rhythm",continue_rect.position+Vector2(10,35),19,PAPER,body_font,245)
 	_label("Sonnet 17 · Shakespeare",Vector2(90,683),16,Color(INK,0.6))
 
+	PuzzleNavigation.draw_menu(self, body_font)
+
 func _gui_input(event: InputEvent) -> void:
+	if PuzzleNavigation.is_menu_press(event):
+		PuzzleNavigation.return_to_menu(self)
+		accept_event()
+		return
 	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
 		return
 	var point := get_local_mouse_position()

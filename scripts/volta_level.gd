@@ -54,6 +54,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO,size),PAPER)
 	if showing_introduction:
 		_draw_introduction()
+		PuzzleNavigation.draw_menu(self, body_font)
 		return
 	_label("In Countless Shadows",Vector2(90,95),39,INK,display_font)
 	_label(str(level["title"]),Vector2(90,150),27,INK)
@@ -94,7 +95,13 @@ func _draw() -> void:
 		_wrapped("Discover a turn to continue",Vector2(925,650),245,16,Color(INK,0.6))
 	_label("Sonnet 17  ·  Shakespeare",Vector2(90,683),16,Color(INK,0.6))
 
+	PuzzleNavigation.draw_menu(self, body_font)
+
 func _gui_input(event: InputEvent) -> void:
+	if PuzzleNavigation.is_menu_press(event):
+		PuzzleNavigation.return_to_menu(self)
+		accept_event()
+		return
 	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
 		return
 	var point := get_local_mouse_position()

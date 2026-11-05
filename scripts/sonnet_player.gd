@@ -567,6 +567,7 @@ func _draw() -> void:
 	draw_set_transform(_offset(), 0.0, Vector2(_scale(),_scale()))
 	_page()
 	draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
+	PuzzleNavigation.draw_menu(self, body_font)
 
 func _write(t: String, at: Vector2, font_size: int, color: Color, use_gothic := false) -> void:
 	draw_string(gothic if use_gothic else body_font, at, t, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
@@ -707,6 +708,10 @@ func _draw_piece(i: int) -> void:
 				_ink_join(Vector2(target.end.x+5,target.get_center().y),ink_color,1.0 - distance / 55.0)
 
 func _gui_input(event: InputEvent) -> void:
+	if PuzzleNavigation.is_menu_press(event):
+		PuzzleNavigation.return_to_menu(self)
+		accept_event()
+		return
 	if not intro_active and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_H:
 			show_detail = not show_detail
