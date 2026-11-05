@@ -93,11 +93,20 @@ func _on_level_select_input(event: InputEvent) -> void:
 		get_tree().change_scene_to_file("res://scenes/level_select.tscn")
 
 func _on_settings_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		var dialog := AcceptDialog.new()
-		dialog.title = "Settings"
-		dialog.dialog_text = "Settings controls are not implemented yet. Use Level Select to explore the prototype."
-		add_child(dialog)
-		dialog.popup_centered()
-		dialog.confirmed.connect(dialog.queue_free)
-		dialog.canceled.connect(dialog.queue_free)
+	if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
+		return
+	var dialog := AcceptDialog.new()
+	dialog.title = "Settings"
+	dialog.min_size = Vector2i(350, 150)
+	var toggle := CheckButton.new()
+	toggle.text = "Sound"
+	toggle.button_pressed = GameSettings.sound_enabled
+	toggle.custom_minimum_size = Vector2(300, 60)
+	toggle.toggled.connect(func(enabled: bool) -> void:
+		GameSettings.set_sound_enabled(enabled)
+	)
+	dialog.add_child(toggle)
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
