@@ -64,22 +64,23 @@ var constraint_report: Dictionary = {}
 var undo_stack: Array[Dictionary] = []
 var redo_stack: Array[Dictionary] = []
 var drag_snapshot: Dictionary = {}
+var composition: CompositionState
+var reading_view := false
+var placement_hint := ""
+const SAVE_PATH := "user://composition.json"
 
 # Composition history stores only editable state, not animation or audio.
 func _snapshot() -> Dictionary:
-	var state: Array[Dictionary] = []
-	for piece in pieces:
-		state.append({"pos":piece["pos"],"raised":piece["raised"]})
-	return {"pieces":state,"page":tray_page}
+	return {"lines":composition.capture(),"page":tray_page}
 
 func _restore(state: Dictionary) -> void:
-	if state.is_empty() or state["pieces"].size() != pieces.size():
+	if state.is_empty() or not state.has("lines"):
 		return
-	for i in range(pieces.size()):
-		pieces[i]["pos"] = state["pieces"][i]["pos"]
-		pieces[i]["raised"] = state["pieces"][i]["raised"]
-	tray_page = int(state["page"])
+	if not composition.restore(state["lines"]):
+		return
+	tray_page = clampi(int(state.get("page",0)),0,maxi(0,int((tray_indices.size()-1)/TRAY_PAGE_SIZE)))
 	dragging = -1
+	_layout_composition()
 	queue_redraw()
 
 func _undo() -> void:
@@ -94,32 +95,101 @@ func _redo() -> void:
 	undo_stack.append(_snapshot())
 	_restore(redo_stack.pop_back())
 
-func _line_width_fits(ids: Array[int]) -> bool:
-	var total := 129.0
+func _line_width_fits(ids: Array) -> bool:
+	var x := 129.0
 	for id in ids:
-		total += float(pieces[id]["width"]) + 4.0
-	return total <= 870.0
+		x += float(pieces[int(id)]["width"]) + 4.0
+	return x <= 870.0
+
+func _layout_composition() -> void:
+	for id in range(pieces.size()):
+		pieces[id]["raised"] = composition.find_line(id) >= 0
+		if not bool(pieces[id]["raised"]) and id != dragging:
+			pieces[id]["pos"] = pieces[id]["tray_pos"]
+	for n in range(14):
+		var x := 129.0
+		for id in composition.lines[n]:
+			pieces[int(id)]["pos"] = Vector2(x,123.0 + float(n)*39.0)
+			x += float(pieces[int(id)]["width"]) + 4.0
+
+func _insertion_index(id: int, line_number: int, drop_x: float) -> int:
+	var index := 0
+	var x := 129.0
+	for existing in composition.lines[line_number]:
+		if int(existing) == id:
+			continue
+		var width: float = pieces[int(existing)]["width"]
+		if drop_x < x + width*0.5:
+			return index
+		x += width + 4.0
+		index += 1
+	return index
 
 func _insert_piece(id: int, line_number: int, drop_x: float) -> bool:
 	if line_number < 0 or line_number >= 14:
 		return false
-	var ids := _line_words(line_number,false)
-	var insert_at := ids.size()
-	for k in range(ids.size()):
-		var rect := _rect(ids[k])
-		if drop_x < rect.get_center().x:
-			insert_at = k
-			break
-	ids.insert(insert_at,id)
-	if not _line_width_fits(ids):
+	var index := _insertion_index(id,line_number,drop_x)
+	var candidate: Array = composition.lines[line_number].duplicate()
+	candidate.erase(id)
+	candidate.insert(index,id)
+	if not _line_width_fits(candidate):
 		return false
-	pieces[id]["raised"] = true
-	var x := 129.0
-	var y := 123.0 + float(line_number) * 39.0
-	for word_id in ids:
-		pieces[word_id]["pos"] = Vector2(x,y)
-		x += float(pieces[word_id]["width"]) + 4.0
+	if not composition.insert_word(id,line_number,index):
+		return false
+	_layout_composition()
 	return true
+
+func _save_composition() -> void:
+	var file := FileAccess.open(SAVE_PATH,FileAccess.WRITE)
+	if file == null:
+		discoveries.append("Could not save the composition.")
+		return
+	file.store_string(JSON.stringify({"version":1,"lines":composition.capture()}))
+	discoveries.append("Composition saved.")
+
+func _load_composition() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		discoveries.append("No saved composition yet.")
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	if not (parsed is Dictionary) or int(parsed.get("version",0)) != 1 or not (parsed.get("lines") is Array):
+		discoveries.append("Save format not recognized.")
+		return
+	# JSON numbers are converted to integers only after validating the structure.
+	var restored: Array = []
+	for line in parsed["lines"]:
+		if not (line is Array):
+			discoveries.append("Invalid saved composition.")
+			return
+		var ids: Array = []
+		for value in line:
+			if not (value is float or value is int) or float(value) != floorf(float(value)):
+				discoveries.append("Invalid word ID in save.")
+				return
+			ids.append(int(value))
+		restored.append(ids)
+	var previous := _snapshot()
+	if not composition.restore(restored):
+		discoveries.append("Saved composition has invalid or duplicate words.")
+		return
+	for line in composition.lines:
+		if not _line_width_fits(line):
+			_restore(previous)
+			discoveries.append("Saved line exceeds the page width.")
+			return
+	undo_stack.append(previous)
+	redo_stack.clear()
+	_layout_composition()
+	discoveries.append("Composition loaded.")
+
+func _export_text() -> void:
+	var file := FileAccess.open("user://sonnet17-recomposed.txt",FileAccess.WRITE)
+	if file == null:
+		discoveries.append("Could not export text.")
+		return
+	for line in composition.as_words(pieces):
+		file.store_line(" ".join(PackedStringArray(line)))
+	discoveries.append("Exported sonnet17-recomposed.txt to user data.")
 
 func _process(delta: float) -> void:
 	if intro_active:
@@ -152,6 +222,7 @@ func _ready() -> void:
 
 func _scatter() -> void:
 	pieces.clear()
+	composition = CompositionState.new()
 	original_lines.clear()
 	tray_indices.clear()
 	var index := 0
@@ -193,6 +264,7 @@ func _scatter() -> void:
 		pieces[id]["tray_pos"] = Vector2(tx, ty)
 		pieces[id]["tray_page"] = int(order / TRAY_PAGE_SIZE)
 		pieces[id]["width"] = maxf(29.0, gothic.get_string_size(str(pieces[id]["word"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 8.0)
+	composition = CompositionState.new(pieces.size())
 
 func _visible_piece(i: int) -> bool:
 	if intro_active:
@@ -274,24 +346,19 @@ func _echo_key(word: String) -> String:
 	return PoemData.echo_key(word)
 
 func _on_stage_line(i: int) -> int:
-	var center_y := _rect(i).get_center().y
-	var line_number := roundi((center_y - 142.5) / 39.0)
-	if line_number < 0 or line_number >= 14:
-		return -1
-	if absf(center_y - (142.5 + float(line_number) * 39.0)) > 19.0:
-		return -1
-	return line_number
+	return composition.find_line(i)
 
 func _line_words(line_number: int, intact: bool) -> Array[int]:
 	var result: Array[int] = []
-	for i in range(pieces.size()):
-		if intact:
+	if line_number < 0 or line_number >= 14:
+		return result
+	if intact:
+		for i in range(pieces.size()):
 			if int(pieces[i]["line"]) == line_number:
 				result.append(i)
-		elif bool(pieces[i]["raised"]) and _on_stage_line(i) == line_number:
-			result.append(i)
-	result.sort_custom(func(a: int, b: int) -> bool:
-		return _rect(a).position.x < _rect(b).position.x)
+	else:
+		for id in composition.lines[line_number]:
+			result.append(int(id))
 	return result
 
 func _line_syllables(line_number: int, intact: bool) -> int:
@@ -377,6 +444,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	var turns: Array[int] = []
 	var echoes: Dictionary = {}
 	var all_words: Array[String] = []
+	var arranged_words: Array = []
 	for n in range(14):
 		var ids := _line_words(n,intact)
 		var count := 0
@@ -406,6 +474,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 			var w: String = words[k]
 			if w.ends_with(",") or w.ends_with(";") or w.ends_with(":") or w.ends_with("?") or w.ends_with("!"):
 				internal_pauses.append(k)
+		arranged_words.append(words)
 		var meter: Dictionary = PoemData.metrical_evidence(words)
 		lines.append({"ids":ids,"syllables":count,"meter":meter,"family":_rhyme_family(ending),
 			"ending":ending,"end_stopped":end_stopped,"internal_pauses":internal_pauses,
@@ -439,7 +508,7 @@ func _analyze_composition(intact: bool) -> Dictionary:
 	# Completion is a composition-state fact, not a verdict on poetic quality.
 	# The formal candidate remains provisional when rhymes or stress are uncertain.
 	var complete := used == pieces.size() and filled == 14
-	var hypotheses := PoemData.reading_hypotheses(all_words)
+	var hypotheses := PoemData.reading_hypotheses(arranged_words)
 	var tentative_rhymes := 0
 	for pair in pairs:
 		if str(pair["evidence"]) == "possible":
@@ -474,15 +543,8 @@ func _draw_form_report(model: Dictionary) -> void:
 # Keep assembled words as a readable sequence after every drop.
 # The left-to-right order is taken from the drop positions; subsequent words
 # are reflowed at their actual rendered width, not their original positions.
-func _reflow_line(line_number: int) -> void:
-	if line_number < 0 or line_number >= 14:
-		return
-	var ids := _line_words(line_number,false)
-	var x := 129.0
-	var y := 123.0 + float(line_number) * 39.0
-	for id in ids:
-		pieces[id]["pos"] = Vector2(x,y)
-		x += float(pieces[id]["width"]) + 4.0
+func _reflow_line(_line_number: int) -> void:
+	_layout_composition()
 
 func _neighbor(i: int, j: int) -> bool:
 	var a := _rect(i)
@@ -526,6 +588,7 @@ func _page() -> void:
 	var model := _analyze_composition(intact) if not intro_active or intact else {}
 	if not intro_active:
 		_draw_form_report(model)
+		_write("S SAVE   L LOAD   E EXPORT   R READ   CMD+Z UNDO",Vector2(905,697),11,Color(INK,0.62))
 	_draw_formal_overlay(model,intact)
 	# Relationships appear between physically adjacent words on the page.
 	for i in range(pieces.size()):
@@ -546,9 +609,55 @@ func _page() -> void:
 			_draw_piece(i)
 	if dragging >= 0:
 		_draw_piece(dragging)
-	if discoveries.size() > 0:
+	if dragging >= 0:
+		_draw_drop_preview()
+	if reading_view and not intro_active:
+		_draw_reading_view(model)
+	if discoveries.size() > 0 and not reading_view:
 		var last: String = discoveries[discoveries.size()-1]
 		_write(last,Vector2(110,678),13,OXBLOOD)
+func _drop_target(p: Vector2, id: int) -> Dictionary:
+	var line_number := roundi((p.y - 142.5) / 39.0)
+	var target_y := 142.5 + float(line_number) * 39.0
+	if not STAGE.has_point(p) or line_number < 0 or line_number >= 14 or absf(p.y-target_y) > 19.0:
+		return {"valid":false,"reason":"Drop onto one of the fourteen verse lines."}
+	var index := _insertion_index(id,line_number,p.x)
+	var candidate: Array = composition.lines[line_number].duplicate()
+	candidate.insert(index,id)
+	if not _line_width_fits(candidate):
+		return {"valid":false,"reason":"This line is full; try another line."}
+	var x := 129.0
+	for i in range(index):
+		x += float(pieces[int(candidate[i])]["width"]) + 4.0
+	return {"valid":true,"line":line_number,"index":index,"x":x}
+
+func _draw_drop_preview() -> void:
+	var target := _drop_target(mouse_at,dragging)
+	if bool(target["valid"]):
+		var x: float = target["x"]
+		var y := 123.0 + float(target["line"])*39.0
+		draw_line(Vector2(x,y-4),Vector2(x,y+30),TEAL,2.0)
+		_write("LINE %d · INSERT %d" % [int(target["line"])+1,int(target["index"])+1],Vector2(110,678),13,TEAL)
+	else:
+		_write(str(target["reason"]),Vector2(110,678),13,OXBLOOD)
+
+func _draw_reading_view(model: Dictionary) -> void:
+	draw_rect(Rect2(93,92,1095,610),PAPER)
+	draw_rect(Rect2(93,92,1095,610),Color(INK,0.25),false,1.0)
+	_write("YOUR SONNET  ·  R TO RETURN",Vector2(124,126),20,INK)
+	for n in range(14):
+		var ids: Array = model["lines"][n]["ids"]
+		var words: PackedStringArray = []
+		for id in ids:
+			words.append(str(pieces[int(id)]["word"]))
+		_write("%2d   %s" % [n+1," ".join(words)],Vector2(126,162+n*30),17,INK)
+	_write("FORM: %d / 14 TEN-SYLLABLE LINES  ·  %d / 7 RHYME PAIRS" % [int(model["ten"]),int(model["rhymes"])],Vector2(125,613),14,COPPER)
+	var interpretation := "No reading is prescribed. Consider what the arrangement makes possible."
+	if not model["hypotheses"].is_empty():
+		interpretation = str(model["hypotheses"][0])
+	_write(interpretation,Vector2(125,649),15,OXBLOOD)
+	_write("S SAVE   E EXPORT   L LOAD   R CLOSE",Vector2(125,680),12,INK)
+
 func _has_raised() -> bool:
 	for p in pieces:
 		if bool(p["raised"]):
@@ -588,6 +697,26 @@ func _draw_piece(i: int) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if not intro_active and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_R:
+			reading_view = not reading_view
+			queue_redraw()
+			accept_event()
+			return
+		if event.keycode == KEY_S and not event.is_command_or_control_pressed():
+			_save_composition()
+			queue_redraw()
+			accept_event()
+			return
+		if event.keycode == KEY_L:
+			_load_composition()
+			queue_redraw()
+			accept_event()
+			return
+		if event.keycode == KEY_E:
+			_export_text()
+			queue_redraw()
+			accept_event()
+			return
 		if event.is_command_or_control_pressed() and event.keycode == KEY_Z:
 			if event.shift_pressed:
 				_redo()
@@ -605,6 +734,8 @@ func _gui_input(event: InputEvent) -> void:
 			_paper_sound(0.065)
 			queue_redraw()
 			accept_event()
+		return
+	if reading_view:
 		return
 	if event is InputEventMouseMotion:
 		mouse_at = _local_point(event.position)
@@ -637,8 +768,9 @@ func _gui_input(event: InputEvent) -> void:
 				return
 			for i in range(pieces.size()-1,-1,-1):
 				if _visible_piece(i) and _rect(i).grow(4).has_point(p):
-					var old_line := _on_stage_line(i) if bool(pieces[i]["raised"]) else -1
+					var old_line := composition.find_line(i)
 					drag_snapshot = _snapshot()
+					composition.remove_word(i)
 					dragging = i
 					hover = i
 					grab = p - Vector2(pieces[i]["pos"])
@@ -655,14 +787,13 @@ func _gui_input(event: InputEvent) -> void:
 			var id := dragging
 			var drop := _local_point(event.position)
 			dragging = -1
-			var line_number := roundi((drop.y - 142.5) / 39.0)
-			var target_y := 142.5 + float(line_number) * 39.0
-			var valid := STAGE.has_point(drop) and absf(drop.y-target_y) <= 19.0
+			var target := _drop_target(drop,id)
+			var valid: bool = target["valid"]
 			if valid:
-				valid = _insert_piece(id,line_number,drop.x)
+				valid = _insert_piece(id,int(target["line"]),drop.x)
 			if not valid:
 				_restore(drag_snapshot)
-				discoveries.append("That placement does not fit the verse.")
+				discoveries.append(str(target["reason"]) if not bool(target["valid"]) else "That placement does not fit the verse.")
 			else:
 				undo_stack.append(drag_snapshot)
 				redo_stack.clear()
